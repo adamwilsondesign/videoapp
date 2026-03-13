@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <title>Allybi</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Screen 1: Recording -->
+  <div id="screen-recording" class="screen active">
+    <div class="recording-container">
+      <video id="camera-preview" autoplay playsinline muted></video>
+      <div class="recording-overlay">
+        <div class="recording-top-bar">
+          <div class="recording-indicator" id="recording-indicator">
+            <span class="rec-dot"></span>
+            <span class="rec-text">REC</span>
+            <span class="rec-timer" id="rec-timer">0:00</span>
+          </div>
+        </div>
+        <div class="recording-bottom-bar">
+          <button id="btn-record" class="record-btn" aria-label="Record">
+            <div class="record-btn-outer">
+              <div class="record-btn-inner" id="record-btn-inner"></div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Review -->
+  <div id="screen-review" class="screen">
+    <div class="review-container">
+      <video id="review-player" playsinline controls></video>
+      <div class="review-actions">
+        <button id="btn-retake" class="btn btn-secondary">Retake</button>
+        <button id="btn-finish" class="btn btn-primary">Finish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Uploading -->
+  <div id="screen-uploading" class="screen">
+    <div class="uploading-container">
+      <div class="upload-content" id="upload-content">
+        <div class="upload-spinner"></div>
+        <p class="upload-status" id="upload-status">Uploading...</p>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <p class="upload-percent" id="upload-percent">0%</p>
+      </div>
+      <div class="upload-error" id="upload-error" style="display:none">
+        <div class="error-icon">!</div>
+        <p class="error-message" id="error-message"></p>
+        <button id="btn-retry" class="btn btn-primary">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 4: Success -->
+  <div id="screen-success" class="screen">
+    <div class="success-container">
+      <div class="success-checkmark">
+        <svg viewBox="0 0 52 52" class="checkmark-svg">
+          <circle cx="26" cy="26" r="25" fill="none" stroke="#4ade80" stroke-width="2"/>
+          <path fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        </svg>
+      </div>
+      <h1 class="success-title">Allybi Verified</h1>
+      <div class="success-detail">
+        <span class="detail-label">Verification ID</span>
+        <span class="detail-value mono" id="success-id"></span>
+      </div>
+      <div class="success-detail">
+        <span class="detail-label">Verification URL</span>
+        <span class="detail-value mono link" id="success-url"></span>
+      </div>
+      <div class="success-actions">
+        <a id="btn-download" class="btn btn-secondary" download>Download Export Video</a>
+        <button id="btn-view" class="btn btn-outline">View Verification Page</button>
+        <button id="btn-new" class="btn btn-primary">Record Another</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
