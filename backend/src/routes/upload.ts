@@ -68,7 +68,7 @@ router.post("/", upload.single("video"), (req: Request, res: Response): void => 
     uploadTimestamp
   );
 
-  const host = req.get("host") || "localhost:3000";
+  const host = (req.get("host") as string) || "localhost:3000";
   const protocol = req.protocol;
 
   res.json({

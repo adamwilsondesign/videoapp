@@ -7,10 +7,11 @@ const router = Router();
 const TEMPLATE_PATH = path.resolve(__dirname, "../templates/verify.html");
 
 router.get("/api/verify/:shortID", (req: Request, res: Response): void => {
+  const shortID = req.params.shortID as string;
   const db = getDb();
   const row = db
     .prepare("SELECT * FROM videos WHERE short_id = ?")
-    .get(req.params.shortID) as any;
+    .get(shortID) as any;
 
   if (!row) {
     res.status(404).json({ error: "Video not found" });
@@ -28,9 +29,10 @@ router.get("/api/verify/:shortID", (req: Request, res: Response): void => {
 });
 
 router.get("/:shortID", (req: Request, res: Response): void => {
+  const shortID = req.params.shortID as string;
   // Skip reserved paths (static files, api, etc.)
   const reserved = ["api", "videos", "app", "app.js", "styles.css", "favicon.ico"];
-  if (reserved.includes(req.params.shortID) || req.params.shortID.includes(".")) {
+  if (reserved.includes(shortID) || shortID.includes(".")) {
     res.status(404).send("Not found");
     return;
   }
@@ -38,7 +40,7 @@ router.get("/:shortID", (req: Request, res: Response): void => {
   const db = getDb();
   const row = db
     .prepare("SELECT * FROM videos WHERE short_id = ?")
-    .get(req.params.shortID) as any;
+    .get(shortID) as any;
 
   if (!row) {
     res.status(404).send("Video not found");

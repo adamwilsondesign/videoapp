@@ -7,10 +7,11 @@ const UPLOADS_DIR = path.resolve(__dirname, "../../uploads");
 const router = Router();
 
 router.get("/:shortID", (req: Request, res: Response): void => {
+  const shortID = req.params.shortID as string;
   const db = getDb();
   const row = db
     .prepare("SELECT * FROM videos WHERE short_id = ?")
-    .get(req.params.shortID) as any;
+    .get(shortID) as any;
 
   if (!row) {
     res.status(404).json({ error: "Video not found" });
