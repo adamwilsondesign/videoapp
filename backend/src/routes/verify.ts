@@ -46,7 +46,7 @@ router.get("/:shortID", (req: Request, res: Response): void => {
   }
 
   let template = fs.readFileSync(TEMPLATE_PATH, "utf-8");
-  const host = req.get("host") || "localhost:3000";
+  const host = (req.get("host") as string) || "localhost:3000";
   const protocol = req.protocol;
 
   template = template
