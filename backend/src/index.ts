@@ -17,6 +17,11 @@ app.use(express.json());
 const publicDir = path.resolve(__dirname, "../public");
 app.use(express.static(publicDir));
 
+// Redirect / to /app
+app.get("/", (_req, res) => {
+  res.redirect("/app");
+});
+
 // Serve /app → app.html
 app.get("/app", (_req, res) => {
   res.sendFile(path.join(publicDir, "app.html"));
