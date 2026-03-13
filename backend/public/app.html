@@ -23,10 +23,17 @@
           </div>
         </div>
         <div class="recording-bottom-bar">
+          <div class="bottom-bar-spacer"></div>
           <button id="btn-record" class="record-btn" aria-label="Record">
             <div class="record-btn-outer">
               <div class="record-btn-inner" id="record-btn-inner"></div>
             </div>
+          </button>
+          <button id="btn-flip" class="flip-btn" aria-label="Flip camera">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 3h5v5"/><path d="M8 21H3v-5"/>
+              <path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -36,10 +43,17 @@
   <!-- Screen 2: Review -->
   <div id="screen-review" class="screen">
     <div class="review-container">
-      <video id="review-player" playsinline controls></video>
+      <h2 class="review-title">Review Recording</h2>
+      <div class="review-video-wrapper">
+        <video id="review-player" playsinline></video>
+        <button id="btn-play-toggle" class="play-toggle" aria-label="Play/Pause">
+          <svg id="play-icon" width="48" height="48" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+          <svg id="pause-icon" width="48" height="48" viewBox="0 0 24 24" fill="white" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+      </div>
       <div class="review-actions">
         <button id="btn-retake" class="btn btn-secondary">Retake</button>
-        <button id="btn-finish" class="btn btn-primary">Finish</button>
+        <button id="btn-finish" class="btn btn-primary">Upload &amp; Verify</button>
       </div>
     </div>
   </div>

@@ -7,6 +7,7 @@ let recordingStartTime = null;
 let timerInterval = null;
 let currentShortID = null;
 let currentVerifyURL = null;
+let useFrontCamera = false;
 
 // ============ DOM REFS ============
 const screens = {
@@ -22,9 +23,14 @@ const recordBtnInner = document.getElementById("record-btn-inner");
 const recordingIndicator = document.getElementById("recording-indicator");
 const recTimer = document.getElementById("rec-timer");
 
+const btnFlip = document.getElementById("btn-flip");
+
 const reviewPlayer = document.getElementById("review-player");
 const btnRetake = document.getElementById("btn-retake");
 const btnFinish = document.getElementById("btn-finish");
+const btnPlayToggle = document.getElementById("btn-play-toggle");
+const playIcon = document.getElementById("play-icon");
+const pauseIcon = document.getElementById("pause-icon");
 
 const uploadContent = document.getElementById("upload-content");
 const uploadError = document.getElementById("upload-error");
@@ -49,10 +55,10 @@ function showScreen(name) {
 // ============ CAMERA ============
 async function startCamera() {
   try {
-    // Try rear camera first (mobile), fall back to any camera (desktop)
+    const facing = useFrontCamera ? "user" : "environment";
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: true,
       });
     } catch {
@@ -142,8 +148,22 @@ function stopTimer() {
 function showReview() {
   const url = URL.createObjectURL(recordedBlob);
   reviewPlayer.src = url;
-  reviewPlayer.play();
+  reviewPlayer.currentTime = 0;
+  reviewPlayer.pause();
+  updatePlayButton(false);
   showScreen("review");
+}
+
+function updatePlayButton(playing) {
+  if (playing) {
+    playIcon.style.display = "none";
+    pauseIcon.style.display = "block";
+    btnPlayToggle.classList.add("hidden");
+  } else {
+    playIcon.style.display = "block";
+    pauseIcon.style.display = "none";
+    btnPlayToggle.classList.remove("hidden");
+  }
 }
 
 // ============ UPLOAD ============
@@ -231,6 +251,31 @@ btnRecord.addEventListener("click", () => {
   } else {
     startRecording();
   }
+});
+
+btnFlip.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") return;
+  useFrontCamera = !useFrontCamera;
+  stopCamera();
+  startCamera();
+});
+
+btnPlayToggle.addEventListener("click", () => {
+  if (reviewPlayer.paused) {
+    reviewPlayer.play();
+    updatePlayButton(true);
+  } else {
+    reviewPlayer.pause();
+    updatePlayButton(false);
+  }
+});
+
+reviewPlayer.addEventListener("ended", () => {
+  updatePlayButton(false);
+});
+
+reviewPlayer.addEventListener("pause", () => {
+  updatePlayButton(false);
 });
 
 btnRetake.addEventListener("click", () => {
