@@ -21,6 +21,13 @@ const linkForgot = $("link-forgot");
 const linkSignupFromLogin = $("link-signup-from-login");
 const linkLoginFromSignup = $("link-login-from-signup");
 const linkBackLogin = $("link-back-login");
+const btnFaceId = $("btn-faceid");
+
+// Face ID overlay
+const faceidOverlay = $("faceid-overlay");
+const faceidIconContainer = $("faceid-icon-container");
+const faceidScanLine = $("faceid-scan-line");
+const faceidLabel = $("faceid-label");
 
 // Library
 const libraryList = $("library-list");
@@ -44,6 +51,7 @@ const btnFinish = $("btn-finish");
 const btnPlayToggle = $("btn-play-toggle");
 const playIcon = $("play-icon");
 const pauseIcon = $("pause-icon");
+const reviewTitleInput = $("review-title-input");
 
 // Upload
 const uploadContent = $("upload-content");
@@ -136,6 +144,30 @@ document.querySelectorAll(".auth-input").forEach((input) => {
   });
 });
 
+// ============ FACE ID ============
+btnFaceId.addEventListener("click", () => {
+  faceidOverlay.classList.add("active");
+  faceidLabel.textContent = "Face ID";
+  faceidLabel.classList.remove("success");
+  faceidIconContainer.classList.remove("success");
+  faceidScanLine.classList.add("scanning");
+
+  // Simulate scanning
+  setTimeout(() => {
+    faceidScanLine.classList.remove("scanning");
+    faceidIconContainer.classList.add("success");
+    faceidLabel.textContent = "Authenticated";
+    faceidLabel.classList.add("success");
+
+    // Navigate to library
+    setTimeout(() => {
+      faceidOverlay.classList.remove("active");
+      showScreen("library");
+      updateLibrary();
+    }, 800);
+  }, 1600);
+});
+
 // ============ LIBRARY ============
 function updateLibrary() {
   if (sessionVideos.length === 0) {
@@ -150,21 +182,214 @@ function updateLibrary() {
   }
 }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function renderLibraryItems() {
   libraryList.innerHTML = "";
-  sessionVideos.forEach((video) => {
+  sessionVideos.forEach((video, index) => {
     const item = document.createElement("div");
     item.className = "library-item";
+    item.setAttribute("data-index", index);
+    item.style.animationDelay = (index * 0.05) + "s";
+
+    const displayTitle = video.title || "Untitled";
+
     item.innerHTML =
-      '<div class="library-item-thumb"><video src="/videos/' + video.shortID + '" preload="metadata" muted></video></div>' +
+      '<div class="drag-handle" aria-label="Reorder">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
+          '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>' +
+        '</svg>' +
+      '</div>' +
+      '<div class="library-item-thumb">' +
+        '<video src="/videos/' + video.shortID + '" preload="metadata" muted playsinline></video>' +
+      '</div>' +
       '<div class="library-item-info">' +
+        '<div class="library-item-title-row">' +
+          '<span class="library-item-title">' + escapeHtml(displayTitle) + '</span>' +
+          '<button class="library-item-edit-btn" data-index="' + index + '" aria-label="Edit title">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>' +
+              '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>' +
+            '</svg>' +
+          '</button>' +
+        '</div>' +
         '<span class="library-item-id">' + video.shortID + '</span>' +
         '<span class="library-item-time">' + formatTime(video.timestamp) + '</span>' +
       '</div>' +
       '<div class="library-item-badge">Verified</div>';
-    item.addEventListener("click", () => viewVerification(video));
+
+    // Click to view verification (not on edit button or drag handle)
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".library-item-edit-btn") || e.target.closest(".drag-handle")) return;
+      viewVerification(video);
+    });
+
     libraryList.appendChild(item);
   });
+
+  // Setup edit buttons
+  setupEditHandlers();
+  // Setup drag-and-drop
+  setupDragAndDrop();
+}
+
+function setupEditHandlers() {
+  const editBtns = libraryList.querySelectorAll(".library-item-edit-btn");
+  editBtns.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.getAttribute("data-index"));
+      const titleRow = btn.closest(".library-item-title-row");
+      const titleSpan = titleRow.querySelector(".library-item-title");
+
+      // Replace title with input
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "library-item-title-input";
+      input.value = sessionVideos[idx].title || "";
+      input.placeholder = "Enter title";
+      input.maxLength = 60;
+
+      titleSpan.replaceWith(input);
+      btn.style.display = "none";
+      input.focus();
+      input.select();
+
+      const save = () => {
+        const newTitle = input.value.trim();
+        sessionVideos[idx].title = newTitle;
+        renderLibraryItems();
+      };
+
+      input.addEventListener("blur", save);
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { input.blur(); }
+        if (ev.key === "Escape") { input.value = sessionVideos[idx].title || ""; input.blur(); }
+      });
+      // Prevent library item click
+      input.addEventListener("click", (ev) => ev.stopPropagation());
+    });
+  });
+}
+
+// ============ DRAG AND DROP ============
+function setupDragAndDrop() {
+  let dragEl = null;
+  let dragIndex = -1;
+  let startY = 0;
+  let startTop = 0;
+  let placeholder = null;
+  let items = [];
+
+  const handles = libraryList.querySelectorAll(".drag-handle");
+  handles.forEach((handle) => {
+    // Touch events
+    handle.addEventListener("touchstart", onStart, { passive: false });
+    // Mouse events for desktop
+    handle.addEventListener("mousedown", onStart);
+  });
+
+  function onStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragEl = e.target.closest(".library-item");
+    dragIndex = parseInt(dragEl.getAttribute("data-index"));
+    const rect = dragEl.getBoundingClientRect();
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startY = clientY;
+    startTop = rect.top;
+
+    // Create placeholder
+    placeholder = document.createElement("div");
+    placeholder.className = "library-item-placeholder";
+    placeholder.style.height = rect.height + "px";
+    placeholder.style.marginBottom = "12px";
+
+    // Make drag item floating
+    dragEl.classList.add("dragging");
+    dragEl.style.position = "fixed";
+    dragEl.style.top = rect.top + "px";
+    dragEl.style.left = rect.left + "px";
+    dragEl.style.width = rect.width + "px";
+    dragEl.style.zIndex = "100";
+
+    dragEl.parentNode.insertBefore(placeholder, dragEl);
+
+    items = [...libraryList.querySelectorAll(".library-item:not(.dragging)")];
+
+    if (e.touches) {
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd);
+    } else {
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onEnd);
+    }
+  }
+
+  function onMove(e) {
+    if (!dragEl) return;
+    e.preventDefault();
+
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const delta = clientY - startY;
+    dragEl.style.top = (startTop + delta) + "px";
+
+    // Check for swap position
+    const dragMid = startTop + delta + dragEl.offsetHeight / 2;
+    for (const otherItem of items) {
+      const otherRect = otherItem.getBoundingClientRect();
+      const otherMid = otherRect.top + otherRect.height / 2;
+
+      if (dragMid < otherMid && placeholder.nextElementSibling === otherItem) {
+        libraryList.insertBefore(placeholder, otherItem);
+        break;
+      }
+      if (dragMid > otherMid && otherItem.nextElementSibling === placeholder) {
+        libraryList.insertBefore(placeholder, otherItem.nextElementSibling || null);
+        break;
+      }
+    }
+  }
+
+  function onEnd() {
+    if (!dragEl) return;
+
+    // Insert dragEl at placeholder position
+    libraryList.insertBefore(dragEl, placeholder);
+    placeholder.remove();
+
+    // Reset styles
+    dragEl.classList.remove("dragging");
+    dragEl.style.position = "";
+    dragEl.style.top = "";
+    dragEl.style.left = "";
+    dragEl.style.width = "";
+    dragEl.style.zIndex = "";
+
+    // Rebuild sessionVideos order from DOM
+    const newOrder = [...libraryList.querySelectorAll(".library-item")];
+    const reordered = newOrder.map((item) => {
+      const idx = parseInt(item.getAttribute("data-index"));
+      return sessionVideos[idx];
+    });
+    sessionVideos = reordered;
+
+    // Re-render to fix indices
+    renderLibraryItems();
+
+    dragEl = null;
+    placeholder = null;
+
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onEnd);
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onEnd);
+  }
 }
 
 function formatTime(iso) {
@@ -293,6 +518,7 @@ function showReview() {
   reviewPlayer.currentTime = 0;
   reviewPlayer.pause();
   updatePlayButton(false);
+  reviewTitleInput.value = "";
   showScreen("review");
 }
 
@@ -340,11 +566,12 @@ async function uploadVideo() {
     progressFill.style.width = "100%";
     uploadPercent.textContent = "100%";
 
-    // Add to session library
+    // Add to session library (with title from review screen)
     sessionVideos.unshift({
       shortID: data.shortID,
       verifyURL: data.verifyURL,
       timestamp: new Date().toISOString(),
+      title: reviewTitleInput.value.trim() || "",
     });
 
     // Show verification result
@@ -421,6 +648,7 @@ btnDownloadExport.addEventListener("click", async () => {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+    showToast("Download started");
   } catch (err) {
     // Fallback: direct navigation
     window.location.href = "/api/export/" + currentShortID;

@@ -58,6 +58,17 @@
       </div>
       <button class="auth-link" id="link-forgot">Forgot Password?</button>
       <div class="auth-divider"><span>or</span></div>
+      <button class="btn btn-glass btn-full btn-faceid-login" id="btn-faceid">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M7 2H4a2 2 0 0 0-2 2v3"/><path d="M17 2h3a2 2 0 0 1 2 2v3"/>
+          <path d="M7 22H4a2 2 0 0 1-2-2v-3"/><path d="M17 22h3a2 2 0 0 0 2-2v-3"/>
+          <path d="M9 9v2"/><path d="M15 9v2"/>
+          <path d="M12 9v5a1.5 1.5 0 0 1-1.5 1.5"/>
+          <path d="M8 17c1 1 2.5 1.5 4 1.5s3-.5 4-1.5"/>
+        </svg>
+        Sign in with Face ID
+      </button>
+      <div class="auth-biometric-spacer"></div>
       <button class="btn btn-glass btn-full" id="link-signup-from-login">Create Account</button>
     </div>
   </div>
@@ -178,6 +189,7 @@
           </svg>
         </button>
       </div>
+      <input type="text" id="review-title-input" class="review-title-input" placeholder="Add a title (optional)" maxlength="60">
       <div class="review-actions">
         <button id="btn-retake" class="btn btn-glass">Retake</button>
         <button id="btn-finish" class="btn btn-primary">Upload &amp; Verify</button>
@@ -251,6 +263,29 @@
           <button class="btn btn-glass btn-full" id="btn-copy-link">Copy Share Link</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Face ID Overlay -->
+  <div id="faceid-overlay" class="faceid-overlay">
+    <div class="faceid-content">
+      <div class="faceid-icon-container" id="faceid-icon-container">
+        <svg class="faceid-svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="0.8" stroke-linecap="round">
+          <path d="M7 2H4a2 2 0 0 0-2 2v3"/><path d="M17 2h3a2 2 0 0 1 2 2v3"/>
+          <path d="M7 22H4a2 2 0 0 1-2-2v-3"/><path d="M17 22h3a2 2 0 0 0 2-2v-3"/>
+          <path d="M9 9v2"/><path d="M15 9v2"/>
+          <path d="M12 9v5a1.5 1.5 0 0 1-1.5 1.5"/>
+          <path d="M8 17c1 1 2.5 1.5 4 1.5s3-.5 4-1.5"/>
+        </svg>
+        <div class="faceid-checkmark">
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" stroke-opacity="0.3"/>
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="faceid-scan-line" id="faceid-scan-line"></div>
+      </div>
+      <p class="faceid-label" id="faceid-label">Face ID</p>
     </div>
   </div>
 
