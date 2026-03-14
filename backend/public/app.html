@@ -5,17 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#091638">
   <title>Allybi</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <!-- Screen 1: Recording -->
-  <div id="screen-recording" class="screen active">
+
+  <!-- Reusable SVG definitions -->
+  <svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+    <defs>
+      <linearGradient id="cam-g1" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#A8C8FF" stop-opacity="0.7"/>
+        <stop offset="55%" stop-color="#5B7FFF"/>
+        <stop offset="100%" stop-color="#2545E8"/>
+      </linearGradient>
+      <linearGradient id="cam-g2" x1="0.5" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#3B5FD8"/>
+        <stop offset="100%" stop-color="#1A30C0"/>
+      </linearGradient>
+      <symbol id="cam-icon" viewBox="0 0 100 90">
+        <rect x="2" y="24" width="76" height="64" rx="18" fill="url(#cam-g1)"/>
+        <path d="M54 10c0-5 4-9 9-9h26c5 0 9 4 9 9v32c0 5-4 9-9 9H70c-4 0-7-3-9-8l-7-24z" fill="url(#cam-g2)"/>
+        <circle cx="40" cy="56" r="16" fill="white"/>
+        <circle cx="84" cy="22" r="5" fill="white" fill-opacity="0.85"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- Splash -->
+  <div id="screen-splash" class="screen active">
+    <div class="splash-container">
+      <div class="splash-icon">
+        <svg width="72" height="65"><use href="#cam-icon"/></svg>
+      </div>
+      <div class="splash-name">Allybi</div>
+      <div class="splash-tagline">Video Verification</div>
+    </div>
+  </div>
+
+  <!-- Login -->
+  <div id="screen-login" class="screen">
+    <div class="auth-container">
+      <div class="auth-icon">
+        <svg width="44" height="40"><use href="#cam-icon"/></svg>
+      </div>
+      <h1 class="auth-title">Welcome Back</h1>
+      <p class="auth-subtitle">Sign in to your account</p>
+      <div class="auth-form">
+        <input type="email" id="login-email" class="auth-input" placeholder="Email address" autocomplete="email">
+        <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password">
+        <button class="btn btn-primary btn-full" id="btn-login">Log In</button>
+      </div>
+      <button class="auth-link" id="link-forgot">Forgot Password?</button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn btn-glass btn-full" id="link-signup-from-login">Create Account</button>
+    </div>
+  </div>
+
+  <!-- Sign Up -->
+  <div id="screen-signup" class="screen">
+    <div class="auth-container">
+      <div class="auth-icon">
+        <svg width="44" height="40"><use href="#cam-icon"/></svg>
+      </div>
+      <h1 class="auth-title">Create Account</h1>
+      <p class="auth-subtitle">Start verifying your videos</p>
+      <div class="auth-form">
+        <input type="text" id="signup-name" class="auth-input" placeholder="Full Name" autocomplete="name">
+        <input type="email" id="signup-email" class="auth-input" placeholder="Email address" autocomplete="email">
+        <input type="password" id="signup-password" class="auth-input" placeholder="Password" autocomplete="new-password">
+        <button class="btn btn-primary btn-full" id="btn-signup">Create Account</button>
+      </div>
+      <button class="auth-link" id="link-login-from-signup">Already have an account? <strong>Log In</strong></button>
+    </div>
+  </div>
+
+  <!-- Reset Password -->
+  <div id="screen-reset" class="screen">
+    <div class="auth-container">
+      <div class="auth-icon">
+        <svg width="44" height="40"><use href="#cam-icon"/></svg>
+      </div>
+      <h1 class="auth-title">Reset Password</h1>
+      <p class="auth-subtitle">Enter your email to receive a reset link</p>
+      <div class="auth-form">
+        <input type="email" id="reset-email" class="auth-input" placeholder="Email address" autocomplete="email">
+        <button class="btn btn-primary btn-full" id="btn-reset">Send Reset Link</button>
+      </div>
+      <button class="auth-link" id="link-back-login">Back to Login</button>
+    </div>
+  </div>
+
+  <!-- Library -->
+  <div id="screen-library" class="screen">
+    <div class="library-container">
+      <div class="library-header">
+        <h1 class="library-title">My Allybi Library</h1>
+        <button class="btn-icon-add" id="btn-create-new" style="display:none" aria-label="Create new">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="library-content" id="library-content">
+        <div class="library-list" id="library-list"></div>
+        <div class="library-empty" id="library-empty">
+          <div class="empty-icon">
+            <svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+              <rect x="8" y="14" width="42" height="38" rx="12" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+              <rect x="2" y="8" width="42" height="38" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+              <path d="M46 18l18-8v32l-18-8V18z" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-linejoin="round"/>
+              <circle cx="23" cy="27" r="8" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+              <circle cx="23" cy="27" r="3" fill="rgba(255,255,255,0.15)"/>
+            </svg>
+          </div>
+          <h2 class="empty-title">No Allybis Yet</h2>
+          <p class="empty-text">Record and verify your first video</p>
+          <button class="btn btn-primary btn-large" id="btn-create-first">Create First Allybi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recording -->
+  <div id="screen-recording" class="screen">
     <div class="recording-container">
       <video id="camera-preview" autoplay playsinline muted></video>
       <div class="recording-overlay">
         <div class="recording-top-bar">
+          <button class="icon-btn" id="btn-back-to-library" aria-label="Back to library">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
           <div class="recording-indicator" id="recording-indicator">
             <span class="rec-dot"></span>
             <span class="rec-text">REC</span>
@@ -30,9 +148,11 @@
             </div>
           </button>
           <button id="btn-flip" class="flip-btn" aria-label="Flip camera">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 3h5v5"/><path d="M8 21H3v-5"/>
-              <path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2v6h-6"/>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M3 22v-6h6"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
           </button>
         </div>
@@ -40,25 +160,32 @@
     </div>
   </div>
 
-  <!-- Screen 2: Review -->
+  <!-- Review -->
   <div id="screen-review" class="screen">
     <div class="review-container">
       <h2 class="review-title">Review Recording</h2>
       <div class="review-video-wrapper">
         <video id="review-player" playsinline></video>
         <button id="btn-play-toggle" class="play-toggle" aria-label="Play/Pause">
-          <svg id="play-icon" width="48" height="48" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
-          <svg id="pause-icon" width="48" height="48" viewBox="0 0 24 24" fill="white" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          <svg id="play-icon" width="52" height="52" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.35)"/>
+            <polygon points="9.5,7 17,12 9.5,17" fill="white"/>
+          </svg>
+          <svg id="pause-icon" width="52" height="52" viewBox="0 0 24 24" fill="none" style="display:none">
+            <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.35)"/>
+            <rect x="8" y="7" width="3" height="10" rx="1" fill="white"/>
+            <rect x="13" y="7" width="3" height="10" rx="1" fill="white"/>
+          </svg>
         </button>
       </div>
       <div class="review-actions">
-        <button id="btn-retake" class="btn btn-secondary">Retake</button>
+        <button id="btn-retake" class="btn btn-glass">Retake</button>
         <button id="btn-finish" class="btn btn-primary">Upload &amp; Verify</button>
       </div>
     </div>
   </div>
 
-  <!-- Screen 3: Uploading -->
+  <!-- Uploading -->
   <div id="screen-uploading" class="screen">
     <div class="uploading-container">
       <div class="upload-content" id="upload-content">
@@ -77,31 +204,58 @@
     </div>
   </div>
 
-  <!-- Screen 4: Success -->
-  <div id="screen-success" class="screen">
-    <div class="success-container">
-      <div class="success-checkmark">
-        <svg viewBox="0 0 52 52" class="checkmark-svg">
-          <circle cx="26" cy="26" r="25" fill="none" stroke="#4ade80" stroke-width="2"/>
-          <path fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-        </svg>
+  <!-- Verification Result -->
+  <div id="screen-verify-result" class="screen">
+    <div class="verify-result-container">
+      <div class="verify-top-bar">
+        <button class="icon-btn" id="btn-verify-back" aria-label="Back to library">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="verify-top-title">Verification</span>
+        <button class="icon-btn" id="btn-share" aria-label="Share">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+        </button>
       </div>
-      <h1 class="success-title">Allybi Verified</h1>
-      <div class="success-detail">
-        <span class="detail-label">Verification ID</span>
-        <span class="detail-value mono" id="success-id"></span>
-      </div>
-      <div class="success-detail">
-        <span class="detail-label">Verification URL</span>
-        <span class="detail-value mono link" id="success-url"></span>
-      </div>
-      <div class="success-actions">
-        <a id="btn-download" class="btn btn-secondary" download>Download Export Video</a>
-        <button id="btn-view" class="btn btn-outline">View Verification Page</button>
-        <button id="btn-new" class="btn btn-primary">Record Another</button>
+      <div class="verify-card">
+        <div class="verify-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Allybi Verified
+        </div>
+        <div class="verify-meta">
+          <div class="verify-meta-row">
+            <span class="verify-label">Verification ID</span>
+            <span class="verify-value mono" id="verify-id"></span>
+          </div>
+          <div class="verify-meta-row">
+            <span class="verify-label">Recorded</span>
+            <span class="verify-value" id="verify-time"></span>
+          </div>
+          <div class="verify-meta-row">
+            <span class="verify-label">URL</span>
+            <span class="verify-value mono verify-url-value" id="verify-url"></span>
+          </div>
+          <div class="verify-meta-row">
+            <span class="verify-label">Status</span>
+            <span class="verify-value verify-status-value">Verified</span>
+          </div>
+        </div>
+        <div class="verify-video-wrapper">
+          <video id="verify-player" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="verify-actions">
+          <button class="btn btn-primary btn-full" id="btn-download-export">Download Video</button>
+          <button class="btn btn-glass btn-full" id="btn-copy-link">Copy Share Link</button>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
 
   <script src="/app.js"></script>
 </body>

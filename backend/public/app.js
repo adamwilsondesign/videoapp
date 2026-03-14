@@ -7,50 +7,193 @@ let recordingStartTime = null;
 let timerInterval = null;
 let currentShortID = null;
 let currentVerifyURL = null;
-let useFrontCamera = false;
+let useFrontCamera = true; // Default to selfie mode
+let sessionVideos = []; // Videos recorded during this demo session
 
 // ============ DOM REFS ============
-const screens = {
-  recording: document.getElementById("screen-recording"),
-  review: document.getElementById("screen-review"),
-  uploading: document.getElementById("screen-uploading"),
-  success: document.getElementById("screen-success"),
-};
+const $ = (id) => document.getElementById(id);
 
-const cameraPreview = document.getElementById("camera-preview");
-const btnRecord = document.getElementById("btn-record");
-const recordBtnInner = document.getElementById("record-btn-inner");
-const recordingIndicator = document.getElementById("recording-indicator");
-const recTimer = document.getElementById("rec-timer");
+// Auth
+const btnLogin = $("btn-login");
+const btnSignup = $("btn-signup");
+const btnReset = $("btn-reset");
+const linkForgot = $("link-forgot");
+const linkSignupFromLogin = $("link-signup-from-login");
+const linkLoginFromSignup = $("link-login-from-signup");
+const linkBackLogin = $("link-back-login");
 
-const btnFlip = document.getElementById("btn-flip");
+// Library
+const libraryList = $("library-list");
+const libraryEmpty = $("library-empty");
+const btnCreateFirst = $("btn-create-first");
+const btnCreateNew = $("btn-create-new");
 
-const reviewPlayer = document.getElementById("review-player");
-const btnRetake = document.getElementById("btn-retake");
-const btnFinish = document.getElementById("btn-finish");
-const btnPlayToggle = document.getElementById("btn-play-toggle");
-const playIcon = document.getElementById("play-icon");
-const pauseIcon = document.getElementById("pause-icon");
+// Recording
+const cameraPreview = $("camera-preview");
+const btnRecord = $("btn-record");
+const recordBtnInner = $("record-btn-inner");
+const recordingIndicator = $("recording-indicator");
+const recTimer = $("rec-timer");
+const btnFlip = $("btn-flip");
+const btnBackToLibrary = $("btn-back-to-library");
 
-const uploadContent = document.getElementById("upload-content");
-const uploadError = document.getElementById("upload-error");
-const uploadStatus = document.getElementById("upload-status");
-const progressFill = document.getElementById("progress-fill");
-const uploadPercent = document.getElementById("upload-percent");
-const errorMessage = document.getElementById("error-message");
-const btnRetry = document.getElementById("btn-retry");
+// Review
+const reviewPlayer = $("review-player");
+const btnRetake = $("btn-retake");
+const btnFinish = $("btn-finish");
+const btnPlayToggle = $("btn-play-toggle");
+const playIcon = $("play-icon");
+const pauseIcon = $("pause-icon");
 
-const successId = document.getElementById("success-id");
-const successUrl = document.getElementById("success-url");
-const btnDownload = document.getElementById("btn-download");
-const btnView = document.getElementById("btn-view");
-const btnNew = document.getElementById("btn-new");
+// Upload
+const uploadContent = $("upload-content");
+const uploadError = $("upload-error");
+const uploadStatus = $("upload-status");
+const progressFill = $("progress-fill");
+const uploadPercent = $("upload-percent");
+const errorMessage = $("error-message");
+const btnRetry = $("btn-retry");
+
+// Verification Result
+const verifyId = $("verify-id");
+const verifyTime = $("verify-time");
+const verifyUrl = $("verify-url");
+const verifyPlayer = $("verify-player");
+const btnVerifyBack = $("btn-verify-back");
+const btnShare = $("btn-share");
+const btnDownloadExport = $("btn-download-export");
+const btnCopyLink = $("btn-copy-link");
+
+// Toast
+const toast = $("toast");
 
 // ============ SCREEN MANAGEMENT ============
 function showScreen(name) {
-  Object.values(screens).forEach((s) => s.classList.remove("active"));
-  screens[name].classList.add("active");
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  const el = $("screen-" + name);
+  if (el) el.classList.add("active");
 }
+
+// ============ TOAST ============
+let toastTimeout = null;
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove("visible"), 2500);
+}
+
+// ============ SPLASH → LOGIN ============
+setTimeout(() => showScreen("login"), 1800);
+
+// ============ AUTH (Demo Flow) ============
+btnLogin.addEventListener("click", () => {
+  btnLogin.textContent = "Signing in...";
+  btnLogin.disabled = true;
+  setTimeout(() => {
+    btnLogin.textContent = "Log In";
+    btnLogin.disabled = false;
+    showScreen("library");
+    updateLibrary();
+  }, 800);
+});
+
+btnSignup.addEventListener("click", () => {
+  btnSignup.textContent = "Creating account...";
+  btnSignup.disabled = true;
+  setTimeout(() => {
+    btnSignup.textContent = "Create Account";
+    btnSignup.disabled = false;
+    showScreen("library");
+    updateLibrary();
+  }, 1000);
+});
+
+btnReset.addEventListener("click", () => {
+  btnReset.textContent = "Sending...";
+  btnReset.disabled = true;
+  setTimeout(() => {
+    btnReset.textContent = "Send Reset Link";
+    btnReset.disabled = false;
+    showToast("Reset link sent! Check your email.");
+    setTimeout(() => showScreen("login"), 1500);
+  }, 800);
+});
+
+linkForgot.addEventListener("click", () => showScreen("reset"));
+linkSignupFromLogin.addEventListener("click", () => showScreen("signup"));
+linkLoginFromSignup.addEventListener("click", () => showScreen("login"));
+linkBackLogin.addEventListener("click", () => showScreen("login"));
+
+// Allow Enter key to submit auth forms
+document.querySelectorAll(".auth-input").forEach((input) => {
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const form = input.closest(".auth-form");
+      const btn = form.querySelector(".btn-primary");
+      if (btn) btn.click();
+    }
+  });
+});
+
+// ============ LIBRARY ============
+function updateLibrary() {
+  if (sessionVideos.length === 0) {
+    libraryEmpty.style.display = "flex";
+    libraryList.style.display = "none";
+    btnCreateNew.style.display = "none";
+  } else {
+    libraryEmpty.style.display = "none";
+    libraryList.style.display = "flex";
+    btnCreateNew.style.display = "flex";
+    renderLibraryItems();
+  }
+}
+
+function renderLibraryItems() {
+  libraryList.innerHTML = "";
+  sessionVideos.forEach((video) => {
+    const item = document.createElement("div");
+    item.className = "library-item";
+    item.innerHTML =
+      '<div class="library-item-thumb"><video src="/videos/' + video.shortID + '" preload="metadata" muted></video></div>' +
+      '<div class="library-item-info">' +
+        '<span class="library-item-id">' + video.shortID + '</span>' +
+        '<span class="library-item-time">' + formatTime(video.timestamp) + '</span>' +
+      '</div>' +
+      '<div class="library-item-badge">Verified</div>';
+    item.addEventListener("click", () => viewVerification(video));
+    libraryList.appendChild(item);
+  });
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function viewVerification(video) {
+  currentShortID = video.shortID;
+  currentVerifyURL = video.verifyURL;
+  verifyId.textContent = video.shortID;
+  verifyTime.textContent = formatTime(video.timestamp);
+  verifyUrl.textContent = video.verifyURL;
+  verifyPlayer.src = "/videos/" + video.shortID;
+  showScreen("verify-result");
+}
+
+btnCreateFirst.addEventListener("click", () => {
+  showScreen("recording");
+  startCamera();
+});
+
+btnCreateNew.addEventListener("click", () => {
+  showScreen("recording");
+  startCamera();
+});
 
 // ============ CAMERA ============
 async function startCamera() {
@@ -85,7 +228,6 @@ function stopCamera() {
 function startRecording() {
   recordedChunks = [];
 
-  // Pick best supported format
   const mimeTypes = [
     "video/mp4;codecs=avc1",
     "video/mp4",
@@ -114,7 +256,7 @@ function startRecording() {
     showReview();
   };
 
-  mediaRecorder.start(100); // collect data every 100ms
+  mediaRecorder.start(100);
   recordingStartTime = Date.now();
   recordBtnInner.classList.add("recording");
   recordingIndicator.classList.add("visible");
@@ -135,7 +277,7 @@ function startTimer() {
     const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
     const mins = Math.floor(elapsed / 60);
     const secs = elapsed % 60;
-    recTimer.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+    recTimer.textContent = mins + ":" + secs.toString().padStart(2, "0");
   }, 250);
 }
 
@@ -176,20 +318,19 @@ async function uploadVideo() {
   uploadStatus.textContent = "Uploading...";
 
   try {
-    // Step 1: Upload
     const formData = new FormData();
     const ext = recordedBlob.type.includes("mp4") ? "mp4" : "webm";
-    formData.append("video", recordedBlob, `recording.${ext}`);
+    formData.append("video", recordedBlob, "recording." + ext);
 
     const response = await uploadWithProgress(formData, (pct) => {
-      const scaledPct = Math.round(pct * 80); // 0-80% for upload
+      const scaledPct = Math.round(pct * 80);
       progressFill.style.width = scaledPct + "%";
       uploadPercent.textContent = scaledPct + "%";
     });
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Upload failed (${response.status}): ${text}`);
+      throw new Error("Upload failed (" + response.status + "): " + text);
     }
 
     const data = await response.json();
@@ -199,7 +340,15 @@ async function uploadVideo() {
     progressFill.style.width = "100%";
     uploadPercent.textContent = "100%";
 
-    showSuccess();
+    // Add to session library
+    sessionVideos.unshift({
+      shortID: data.shortID,
+      verifyURL: data.verifyURL,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Show verification result
+    showVerificationResult();
   } catch (err) {
     uploadContent.style.display = "none";
     uploadError.style.display = "flex";
@@ -229,19 +378,90 @@ function uploadWithProgress(formData, onProgress) {
 
     xhr.onerror = () => reject(new Error("Network error — is the server running?"));
     xhr.ontimeout = () => reject(new Error("Upload timed out"));
-    xhr.timeout = 300000; // 5 minutes
+    xhr.timeout = 300000;
 
     xhr.send(formData);
   });
 }
 
-// ============ SUCCESS ============
-function showSuccess() {
-  successId.textContent = currentShortID;
-  successUrl.textContent = currentVerifyURL;
-  btnDownload.href = `/api/export/${currentShortID}`;
-  btnDownload.download = `allybi_${currentShortID}.mp4`;
-  showScreen("success");
+// ============ VERIFICATION RESULT ============
+function showVerificationResult() {
+  verifyId.textContent = currentShortID;
+  verifyTime.textContent = formatTime(new Date().toISOString());
+  verifyUrl.textContent = currentVerifyURL;
+  verifyPlayer.src = "/videos/" + currentShortID;
+  showScreen("verify-result");
+}
+
+// ============ DOWNLOAD (Fixed for mobile) ============
+btnDownloadExport.addEventListener("click", async () => {
+  const originalText = btnDownloadExport.textContent;
+  btnDownloadExport.textContent = "Preparing...";
+  btnDownloadExport.disabled = true;
+
+  try {
+    const resp = await fetch("/api/export/" + currentShortID);
+
+    // Check if server returned JSON error instead of video
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const err = await resp.json();
+      throw new Error(err.error || "Export failed");
+    }
+
+    if (!resp.ok) throw new Error("Download failed");
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "allybi_" + currentShortID + ".mp4";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    // Fallback: direct navigation
+    window.location.href = "/api/export/" + currentShortID;
+  } finally {
+    btnDownloadExport.textContent = originalText;
+    btnDownloadExport.disabled = false;
+  }
+});
+
+// ============ SHARE ============
+btnShare.addEventListener("click", () => {
+  if (navigator.share) {
+    navigator.share({
+      title: "Allybi Verified Video",
+      text: "Verified video " + currentShortID,
+      url: currentVerifyURL,
+    }).catch(() => {});
+  } else {
+    copyToClipboard(currentVerifyURL);
+  }
+});
+
+btnCopyLink.addEventListener("click", () => {
+  copyToClipboard(currentVerifyURL);
+});
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Link copied to clipboard");
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast("Link copied to clipboard");
+  });
 }
 
 // ============ EVENT LISTENERS ============
@@ -270,13 +490,8 @@ btnPlayToggle.addEventListener("click", () => {
   }
 });
 
-reviewPlayer.addEventListener("ended", () => {
-  updatePlayButton(false);
-});
-
-reviewPlayer.addEventListener("pause", () => {
-  updatePlayButton(false);
-});
+reviewPlayer.addEventListener("ended", () => updatePlayButton(false));
+reviewPlayer.addEventListener("pause", () => updatePlayButton(false));
 
 btnRetake.addEventListener("click", () => {
   reviewPlayer.pause();
@@ -290,26 +505,20 @@ btnFinish.addEventListener("click", () => {
   uploadVideo();
 });
 
-btnRetry.addEventListener("click", () => {
-  uploadVideo();
-});
+btnRetry.addEventListener("click", () => uploadVideo());
 
-btnView.addEventListener("click", () => {
-  window.open(currentVerifyURL, "_blank");
-});
-
-successUrl.addEventListener("click", () => {
-  window.open(currentVerifyURL, "_blank");
-});
-
-btnNew.addEventListener("click", () => {
-  currentShortID = null;
-  currentVerifyURL = null;
-  recordedBlob = null;
+btnBackToLibrary.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopRecording();
+  }
   stopCamera();
-  startCamera();
-  showScreen("recording");
+  showScreen("library");
+  updateLibrary();
 });
 
-// ============ INIT ============
-startCamera();
+btnVerifyBack.addEventListener("click", () => {
+  verifyPlayer.pause();
+  verifyPlayer.src = "";
+  showScreen("library");
+  updateLibrary();
+});

@@ -38,6 +38,7 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
   }
 
   // If export already exists, serve it directly
+  // (delete to regenerate with new watermark format)
   if (fs.existsSync(outputPath)) {
     res.download(outputPath, `allybi_${row.short_id}.mp4`);
     return;
@@ -46,11 +47,35 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
   // Build the drawtext string with bullet character
   const stripText = `A \\xE2\\x80\\xA2 Allybi Verified  |  allybi.ai/${row.short_id}`;
 
+  // Build repeating watermark text
+  const wmUnit = `Allybi  ${row.short_id}`;
+  const wmLine = Array(5).fill(wmUnit).join("          ");
+
+  // Generate watermark rows staggered across the video
+  const watermarkFilters: Array<{ filter: string; options: Record<string, string> }> = [];
+  const wmRows = 5;
+  for (let r = 0; r < wmRows; r++) {
+    const yFrac = (0.08 + r * 0.19).toFixed(2);
+    const xOffset = r % 2 === 0 ? "0" : "(w*0.12)";
+    watermarkFilters.push({
+      filter: "drawtext",
+      options: {
+        text: wmLine,
+        fontsize: "(h*0.022)",
+        fontcolor: "white@0.1",
+        x: xOffset,
+        y: `(h*${yFrac})`,
+      },
+    });
+  }
+
   try {
     await new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
         .videoFilters([
-          // 1. Draw full-width semi-transparent black strip at bottom
+          // 1. Repeating watermark across the video
+          ...watermarkFilters,
+          // 2. Draw full-width semi-transparent black strip at bottom
           {
             filter: "drawbox",
             options: {
@@ -62,7 +87,7 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
               t: "fill",
             },
           },
-          // 2. Draw centered white text on top of the strip
+          // 3. Draw centered white text on top of the strip
           {
             filter: "drawtext",
             options: {
