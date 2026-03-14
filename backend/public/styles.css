@@ -41,6 +41,18 @@ html, body {
   flex-direction: column;
   overflow: hidden;
 }
+.screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 0;
+  pointer-events: none;
+}
+.screen > * {
+  position: relative;
+  z-index: 1;
+}
 .screen.active {
   display: flex;
   animation: screenIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
