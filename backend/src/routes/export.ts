@@ -38,9 +38,12 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
   }
 
   // If export already exists, serve it directly
-  // (delete to regenerate with new watermark format)
   if (fs.existsSync(outputPath)) {
-    res.download(outputPath, `allybi_${row.short_id}.mp4`);
+    const stat = fs.statSync(outputPath);
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Content-Disposition", `attachment; filename="allybi_${row.short_id}.mp4"`);
+    fs.createReadStream(outputPath).pipe(res);
     return;
   }
 
@@ -106,7 +109,11 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
         .run();
     });
 
-    res.download(outputPath, `allybi_${row.short_id}.mp4`);
+    const stat = fs.statSync(outputPath);
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Content-Disposition", `attachment; filename="allybi_${row.short_id}.mp4"`);
+    fs.createReadStream(outputPath).pipe(res);
   } catch (err: any) {
     console.error("Export generation failed:", err.message);
     // Clean up partial file

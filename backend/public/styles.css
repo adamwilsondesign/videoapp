@@ -9,7 +9,7 @@
   --primary: #2563EB;
   --primary-light: #60A5FA;
   --primary-dark: #1D4ED8;
-  --bg-gradient: linear-gradient(155deg, #0A4580 0%, #082670 28%, #051845 60%, #030B22 100%);
+  --bg-gradient: url('/bg.jpg') center/cover no-repeat fixed;
   --glass: rgba(255,255,255,0.05);
   --glass-strong: rgba(255,255,255,0.08);
   --glass-border: rgba(255,255,255,0.12);
@@ -27,7 +27,7 @@ html, body {
   height: 100%;
   background: #030B22;
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -175,11 +175,9 @@ html, body {
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 8px 24px rgba(0,0,0,0.3));
-  animation: splashIconFloat 3s ease-in-out infinite;
 }
-@keyframes splashIconFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+.splash-icon img {
+  border-radius: 16px;
 }
 .splash-name {
   font-size: 32px;
@@ -240,6 +238,9 @@ html, body {
   justify-content: center;
   margin-bottom: 24px;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+.auth-icon img {
+  border-radius: 10px;
 }
 .auth-title {
   font-size: 28px;
@@ -571,7 +572,7 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
   letter-spacing: 0.3px;
 }
 .library-item-time {
@@ -705,11 +706,6 @@ html, body {
 .empty-icon {
   margin-bottom: 8px;
   opacity: 0.6;
-  animation: emptyIconBounce 2s ease-in-out infinite;
-}
-@keyframes emptyIconBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
 }
 .empty-title {
   font-size: 22px;
@@ -1167,7 +1163,7 @@ html, body {
   text-align: right;
 }
 .verify-value.mono {
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
   letter-spacing: 0.5px;
 }
 .verify-url-value {
@@ -1250,5 +1246,5 @@ body::after {
 
 /* ============ UTILITIES ============ */
 .mono {
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;
 }
