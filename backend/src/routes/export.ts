@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import path from "path";
 import fs from "fs";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
@@ -26,12 +26,38 @@ try {
   for (const file of existingExports) {
     if (file.startsWith("export_") && file.endsWith(".mp4")) {
       fs.unlinkSync(path.join(EXPORTS_DIR, file));
-      console.log(`Cleared stale export: ${file}`);
+      console.log(`[export] Cleared stale export: ${file}`);
     }
   }
 } catch (err) {
-  console.warn("Could not clear exports directory:", err);
+  console.warn("[export] Could not clear exports directory:", err);
 }
+
+// ============ STARTUP VALIDATION ============
+
+// Check font files exist
+const fontsAvailable = fs.existsSync(FONT_BOLD) && fs.existsSync(FONT_REGULAR);
+console.log(`[export] Font Bold: ${fs.existsSync(FONT_BOLD) ? "OK" : "MISSING"} (${FONT_BOLD})`);
+console.log(`[export] Font Regular: ${fs.existsSync(FONT_REGULAR) ? "OK" : "MISSING"} (${FONT_REGULAR})`);
+
+// Check if drawtext filter is available in the ffmpeg binary
+let drawtextAvailable = false;
+try {
+  const filtersOutput = execFileSync(ffmpegStatic as string, ["-filters"], {
+    timeout: 5000,
+    encoding: "utf-8",
+  });
+  drawtextAvailable = filtersOutput.includes("drawtext");
+  console.log(`[export] FFmpeg drawtext filter: ${drawtextAvailable ? "available" : "NOT available"}`);
+} catch (e: any) {
+  // -filters might exit non-zero on some builds; check stdout+stderr
+  const combined = (e.stdout || "") + (e.stderr || "");
+  drawtextAvailable = combined.includes("drawtext");
+  console.log(`[export] FFmpeg drawtext filter: ${drawtextAvailable ? "available" : "NOT available"} (checked via error output)`);
+}
+
+const canUseOverlays = fontsAvailable && drawtextAvailable;
+console.log(`[export] Overlay mode: ${canUseOverlays ? "FULL (watermarks + strip)" : "FALLBACK (re-encode only)"}`);
 
 // Track exports currently being generated to prevent duplicate work
 const exportsInProgress = new Set<string>();
@@ -96,6 +122,41 @@ function escapeFilterPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
+/** Run FFmpeg export with given filters and output options. Returns the output path on success. */
+function runFfmpeg(
+  inputPath: string,
+  outputPath: string,
+  filters: Array<{ filter: string; options: Record<string, string> }>,
+  outputOpts: string[],
+  shortID: string,
+  label: string
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let cmd = ffmpeg(inputPath);
+
+    if (filters.length > 0) {
+      cmd = cmd.videoFilters(filters);
+    }
+
+    cmd
+      .outputOptions(outputOpts)
+      .output(outputPath)
+      .on("start", (cmdline: string) => {
+        console.log(`[export] FFmpeg ${label} started for ${shortID}`);
+        console.log(`[export] Command: ${cmdline}`);
+      })
+      .on("end", () => {
+        console.log(`[export] FFmpeg ${label} complete for ${shortID}`);
+        resolve();
+      })
+      .on("error", (err: Error) => {
+        console.error(`[export] FFmpeg ${label} failed for ${shortID}:`, err.message);
+        reject(err);
+      })
+      .run();
+  });
+}
+
 // ============ ROUTER ============
 
 const router = Router();
@@ -157,99 +218,101 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
   } catch (probeErr: any) {
     exportsInProgress.delete(shortID);
     console.error(`[export] Probe failed for ${row.short_id}:`, probeErr.message);
-    res.status(500).json({ error: "Failed to analyze video" });
+    res.status(500).json({ error: "Failed to analyze video: " + probeErr.message });
     return;
   }
 
-  // Build strip text with proper UTF-8 bullet character
-  const bulletChar = "\u2022"; // •
-  const rawStripText = `A ${bulletChar} Allybi Verified  |  allybi.ai/${row.short_id}`;
-  const stripText = escapeDrawtext(rawStripText);
+  // Standard output options for universal playback
+  const baseOutputOpts = [
+    "-c:v", "libx264",
+    "-preset", "fast",
+    "-crf", "23",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+  ];
 
-  // Build repeating watermark text
-  const wmUnit = `Allybi  ${row.short_id}`;
-  const wmLine = escapeDrawtext(Array(5).fill(wmUnit).join("          "));
+  // Build overlay filters (only if fonts + drawtext available)
+  const overlayFilters: Array<{ filter: string; options: Record<string, string> }> = [];
 
-  // Generate watermark rows staggered across the video
-  const watermarkFilters: Array<{ filter: string; options: Record<string, string> }> = [];
-  const wmRows = 5;
-  for (let r = 0; r < wmRows; r++) {
-    const yFrac = (0.08 + r * 0.19).toFixed(2);
-    const xOffset = r % 2 === 0 ? "0" : "(w*0.12)";
-    watermarkFilters.push({
+  if (canUseOverlays) {
+    // Build strip text — use simple ASCII bullet to avoid encoding issues
+    const rawStripText = `A - Allybi Verified  |  allybi.ai/${row.short_id}`;
+    const stripText = escapeDrawtext(rawStripText);
+
+    // Build repeating watermark text
+    const wmUnit = `Allybi  ${row.short_id}`;
+    const wmLine = escapeDrawtext(Array(5).fill(wmUnit).join("          "));
+
+    // Generate watermark rows staggered across the video
+    const wmRows = 5;
+    for (let r = 0; r < wmRows; r++) {
+      const yFrac = (0.08 + r * 0.19).toFixed(2);
+      const xOffset = r % 2 === 0 ? "0" : "(w*0.12)";
+      overlayFilters.push({
+        filter: "drawtext",
+        options: {
+          fontfile: escapeFilterPath(FONT_REGULAR),
+          text: wmLine,
+          fontsize: "(h*0.022)",
+          fontcolor: "white@0.10",
+          x: xOffset,
+          y: `(h*${yFrac})`,
+        },
+      });
+    }
+
+    // Strip height: 7% of frame height
+    const stripH = "0.07";
+
+    // Full-width dark strip at bottom
+    overlayFilters.push({
+      filter: "drawbox",
+      options: {
+        x: "0",
+        y: `ih-ih*${stripH}`,
+        w: "iw",
+        h: `ih*${stripH}`,
+        color: "black@0.7",
+        t: "fill",
+      },
+    });
+
+    // Centered white text on the strip
+    overlayFilters.push({
       filter: "drawtext",
       options: {
-        fontfile: escapeFilterPath(FONT_REGULAR),
-        text: wmLine,
-        fontsize: "(h*0.022)",
-        fontcolor: "white@0.10",
-        x: xOffset,
-        y: `(h*${yFrac})`,
+        fontfile: escapeFilterPath(FONT_BOLD),
+        text: stripText,
+        fontsize: "(h*0.024)",
+        fontcolor: "white",
+        x: "(w-text_w)/2",
+        y: `(h-h*${stripH})+((h*${stripH}-text_h)/2)`,
       },
     });
   }
 
-  // Strip height: 7% of frame height
-  const stripH = "0.07";
-
   try {
-    await new Promise<void>((resolve, reject) => {
-      const command = ffmpeg(inputPath)
-        .videoFilters([
-          // 1. Repeating diagonal watermark rows
-          ...watermarkFilters,
-          // 2. Full-width dark strip at bottom (~7% height)
-          {
-            filter: "drawbox",
-            options: {
-              x: "0",
-              y: `ih-ih*${stripH}`,
-              w: "iw",
-              h: `ih*${stripH}`,
-              color: "black@0.7",
-              t: "fill",
-            },
-          },
-          // 3. Centered white text on the strip
-          {
-            filter: "drawtext",
-            options: {
-              fontfile: escapeFilterPath(FONT_BOLD),
-              text: stripText,
-              fontsize: "(h*0.024)",
-              fontcolor: "white",
-              x: "(w-text_w)/2",
-              y: `(h-h*${stripH})+((h*${stripH}-text_h)/2)`,
-            },
-          },
-        ])
-        .outputOptions([
-          // Video: H.264 with universal compatibility settings
-          "-c:v", "libx264",
-          "-preset", "fast",
-          "-crf", "23",
-          "-pix_fmt", "yuv420p",
-          // Audio: transcode to AAC (fixes Opus-in-MP4 incompatibility)
-          "-c:a", "aac",
-          "-b:a", "128k",
-          // MP4 fast-start for streaming
-          "-movflags", "+faststart",
-        ])
-        .output(outputPath)
-        .on("start", (cmdline: string) => {
-          console.log(`[export] FFmpeg started for ${row.short_id}`);
-        })
-        .on("end", () => {
-          console.log(`[export] Complete for ${row.short_id}`);
-          resolve();
-        })
-        .on("error", (err: Error) => {
-          console.error(`[export] Failed for ${row.short_id}:`, err.message);
-          reject(err);
-        });
+    let exportSucceeded = false;
 
-      command.run();
-    });
+    // STAGE 1: Try full export with overlays (if available)
+    if (overlayFilters.length > 0) {
+      try {
+        await runFfmpeg(inputPath, outputPath, overlayFilters, baseOutputOpts, row.short_id, "full");
+        exportSucceeded = true;
+      } catch (fullErr: any) {
+        console.error(`[export] Full export failed, trying fallback. Error: ${fullErr.message}`);
+        // Clean up failed output
+        try { fs.unlinkSync(outputPath); } catch {}
+      }
+    }
+
+    // STAGE 2: Fallback — re-encode without any overlays
+    if (!exportSucceeded) {
+      console.log(`[export] Using fallback (plain re-encode) for ${row.short_id}`);
+      await runFfmpeg(inputPath, outputPath, [], baseOutputOpts, row.short_id, "fallback");
+    }
 
     // Verify the output file is valid
     const stat = fs.statSync(outputPath);
@@ -267,10 +330,10 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
     );
     fs.createReadStream(outputPath).pipe(res);
   } catch (err: any) {
-    console.error("[export] Generation failed:", err.message);
+    console.error("[export] Generation failed completely:", err.message);
     // Clean up partial file
     try { fs.unlinkSync(outputPath); } catch {}
-    res.status(500).json({ error: "Failed to generate export video" });
+    res.status(500).json({ error: "Failed to generate export video: " + err.message });
   } finally {
     exportsInProgress.delete(shortID);
   }
