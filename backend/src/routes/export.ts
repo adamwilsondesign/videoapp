@@ -1,13 +1,10 @@
 import { Router, Request, Response } from "express";
 import path from "path";
 import fs from "fs";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { execFileSync } from "child_process";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { getDb } from "../db/connection";
-
-const execFileAsync = promisify(execFile);
 
 ffmpeg.setFfmpegPath(ffmpegStatic as string);
 
@@ -20,18 +17,28 @@ if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
 }
 
-// Log font availability at startup
-console.log(`[export] Font Bold: ${fs.existsSync(FONT_BOLD) ? "OK" : "MISSING"}`);
-console.log(`[export] Font Regular: ${fs.existsSync(FONT_REGULAR) ? "OK" : "MISSING"}`);
+// ============ STARTUP: detect capabilities once ============
 
-// If another request is already generating the same export, store
-// the promise so subsequent requests can wait for it instead of
-// returning 202 JSON (which breaks direct browser navigation).
+const fontsExist = fs.existsSync(FONT_BOLD) && fs.existsSync(FONT_REGULAR);
+
+let hasDrawtext = false;
+try {
+  const out = execFileSync(ffmpegStatic as string, ["-filters"], {
+    encoding: "utf-8", timeout: 5000,
+  });
+  hasDrawtext = out.includes("drawtext");
+} catch (e: any) {
+  hasDrawtext = ((e.stdout || "") + (e.stderr || "")).includes("drawtext");
+}
+
+const useOverlays = fontsExist && hasDrawtext;
+console.log(`[export] drawtext=${hasDrawtext}, fonts=${fontsExist} → mode: ${useOverlays ? "OVERLAYS" : "FAST COPY"}`);
+
+// Concurrent export tracking
 const pendingExports = new Map<string, Promise<string>>();
 
 // ============ HELPERS ============
 
-/** Escape special characters for FFmpeg drawtext filter text option */
 function escapeDrawtext(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
@@ -40,81 +47,56 @@ function escapeDrawtext(text: string): string {
     .replace(/;/g, "\\;");
 }
 
-/** Escape a file path for FFmpeg filter option */
 function escapeFilterPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
-/** Serve a file as an MP4 download */
 function serveExport(filePath: string, shortID: string, res: Response): void {
   const stat = fs.statSync(filePath);
   res.setHeader("Content-Type", "video/mp4");
   res.setHeader("Content-Length", stat.size);
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="allybi_${shortID}.mp4"`
-  );
+  res.setHeader("Content-Disposition", `attachment; filename="allybi_${shortID}.mp4"`);
   fs.createReadStream(filePath).pipe(res);
 }
 
-/** Generate the export MP4 — tries overlays first, then plain re-encode */
-async function generateExport(
-  inputPath: string,
-  outputPath: string,
-  shortID: string
-): Promise<string> {
-  const fontsExist = fs.existsSync(FONT_BOLD) && fs.existsSync(FONT_REGULAR);
+// ============ EXPORT GENERATORS ============
 
-  const baseOutputOpts = [
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "23",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac",
-    "-b:a", "128k",
-    "-movflags", "+faststart",
-  ];
-
-  // STAGE 1: Try with branded overlays
-  if (fontsExist) {
-    try {
-      await runFfmpegWithOverlays(inputPath, outputPath, shortID, baseOutputOpts);
-      const stat = fs.statSync(outputPath);
-      if (stat.size > 0) {
-        console.log(`[export] Full export OK for ${shortID} (${(stat.size / 1024).toFixed(0)} KB)`);
-        return outputPath;
-      }
-    } catch (err: any) {
-      console.error(`[export] Full export failed for ${shortID}: ${err.message}`);
-      try { fs.unlinkSync(outputPath); } catch {}
-    }
-  }
-
-  // STAGE 2: Fallback — plain re-encode (no overlays)
-  console.log(`[export] Using plain re-encode for ${shortID}`);
-  await new Promise<void>((resolve, reject) => {
+/**
+ * FAST PATH: Copy video stream as-is, only transcode audio to AAC.
+ * Completes in ~1-2 seconds even on slow servers.
+ * Used when drawtext filter is not available.
+ */
+function generateFastExport(inputPath: string, outputPath: string, shortID: string): Promise<string> {
+  console.log(`[export] Fast copy for ${shortID}`);
+  return new Promise<string>((resolve, reject) => {
     ffmpeg(inputPath)
-      .outputOptions(baseOutputOpts)
+      .outputOptions([
+        "-c:v", "copy",        // Copy video stream — no re-encoding
+        "-c:a", "aac",         // Transcode audio to AAC for compatibility
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+      ])
       .output(outputPath)
-      .on("start", (cmd: string) => console.log(`[export] Fallback cmd: ${cmd}`))
-      .on("end", () => resolve())
-      .on("error", (err: Error) => reject(err))
+      .on("start", (cmd: string) => console.log(`[export] Cmd: ${cmd}`))
+      .on("end", () => {
+        console.log(`[export] Fast copy done for ${shortID}`);
+        resolve(outputPath);
+      })
+      .on("error", (err: Error) => {
+        console.error(`[export] Fast copy failed for ${shortID}: ${err.message}`);
+        reject(err);
+      })
       .run();
   });
-
-  const stat = fs.statSync(outputPath);
-  if (stat.size === 0) throw new Error("Export produced empty file");
-  console.log(`[export] Fallback export OK for ${shortID} (${(stat.size / 1024).toFixed(0)} KB)`);
-  return outputPath;
 }
 
-/** Run FFmpeg with branded watermark overlays and verification strip */
-async function runFfmpegWithOverlays(
-  inputPath: string,
-  outputPath: string,
-  shortID: string,
-  outputOpts: string[]
-): Promise<void> {
+/**
+ * FULL PATH: Re-encode with branded watermark overlays + verification strip.
+ * Requires drawtext filter and fonts. Uses ultrafast preset to minimize time.
+ */
+function generateFullExport(inputPath: string, outputPath: string, shortID: string): Promise<string> {
+  console.log(`[export] Full overlay export for ${shortID}`);
+
   const rawStripText = `A - Allybi Verified  |  allybi.ai/${shortID}`;
   const stripText = escapeDrawtext(rawStripText);
   const wmUnit = `Allybi  ${shortID}`;
@@ -143,12 +125,8 @@ async function runFfmpegWithOverlays(
   filters.push({
     filter: "drawbox",
     options: {
-      x: "0",
-      y: `ih-ih*${stripH}`,
-      w: "iw",
-      h: `ih*${stripH}`,
-      color: "black@0.7",
-      t: "fill",
+      x: "0", y: `ih-ih*${stripH}`, w: "iw", h: `ih*${stripH}`,
+      color: "black@0.7", t: "fill",
     },
   });
 
@@ -165,14 +143,28 @@ async function runFfmpegWithOverlays(
     },
   });
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     ffmpeg(inputPath)
       .videoFilters(filters)
-      .outputOptions(outputOpts)
+      .outputOptions([
+        "-c:v", "libx264",
+        "-preset", "ultrafast",   // Fastest encode to beat Render's 30s timeout
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+      ])
       .output(outputPath)
-      .on("start", (cmd: string) => console.log(`[export] Full cmd: ${cmd}`))
-      .on("end", () => resolve())
-      .on("error", (err: Error) => reject(err))
+      .on("start", (cmd: string) => console.log(`[export] Cmd: ${cmd}`))
+      .on("end", () => {
+        console.log(`[export] Full export done for ${shortID}`);
+        resolve(outputPath);
+      })
+      .on("error", (err: Error) => {
+        console.error(`[export] Full export failed for ${shortID}: ${err.message}`);
+        reject(err);
+      })
       .run();
   });
 }
@@ -222,20 +214,41 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
         return;
       }
     } catch {
-      // Previous attempt failed; we'll try again below
+      // Previous attempt failed; fall through to try again
     }
   }
 
   // Generate the export
-  const exportPromise = generateExport(inputPath, outputPath, shortID);
-  pendingExports.set(shortID, exportPromise);
+  const generate = useOverlays
+    ? generateFullExport(inputPath, outputPath, shortID)
+    : generateFastExport(inputPath, outputPath, shortID);
+
+  pendingExports.set(shortID, generate);
 
   try {
-    await exportPromise;
+    await generate;
+
+    const stat = fs.statSync(outputPath);
+    if (stat.size === 0) throw new Error("Export produced empty file");
+
     serveExport(outputPath, shortID, res);
   } catch (err: any) {
     console.error(`[export] Failed for ${shortID}:`, err.message);
     try { fs.unlinkSync(outputPath); } catch {}
+
+    // Last resort: if even fast copy failed, try serving the original file directly
+    if (!useOverlays) {
+      console.log(`[export] Serving original file as last resort for ${shortID}`);
+      try {
+        const origStat = fs.statSync(inputPath);
+        res.setHeader("Content-Type", "video/mp4");
+        res.setHeader("Content-Length", origStat.size);
+        res.setHeader("Content-Disposition", `attachment; filename="allybi_${shortID}.mp4"`);
+        fs.createReadStream(inputPath).pipe(res);
+        return;
+      } catch {}
+    }
+
     res.status(500).json({ error: "Export failed: " + err.message });
   } finally {
     pendingExports.delete(shortID);
