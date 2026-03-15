@@ -190,7 +190,7 @@ function updateLibrary() {
     btnCreateNew.style.display = "none";
   } else {
     libraryEmpty.style.display = "none";
-    libraryList.style.display = "flex";
+    libraryList.style.display = "grid";
     btnCreateNew.style.display = "flex";
     renderLibraryItems();
   }
@@ -208,31 +208,33 @@ function renderLibraryItems() {
     const item = document.createElement("div");
     item.className = "library-item";
     item.setAttribute("data-index", index);
-    item.style.animationDelay = (index * 0.06) + "s";
+    item.style.animationDelay = (index * 0.08) + "s";
 
     const displayTitle = video.title || "Untitled";
 
     item.innerHTML =
-      '<div class="drag-handle" aria-label="Reorder">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
-          '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>' +
-        '</svg>' +
-      '</div>' +
       '<div class="library-item-thumb">' +
         '<video src="/videos/' + video.shortID + '" preload="auto" muted playsinline></video>' +
+        '<div class="library-item-thumb-overlay">' +
+          '<div class="drag-handle" aria-label="Reorder">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
+              '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>' +
+            '</svg>' +
+          '</div>' +
+          '<button class="library-item-menu-btn" data-index="' + index + '" aria-label="More options">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">' +
+              '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>' +
+            '</svg>' +
+          '</button>' +
+        '</div>' +
       '</div>' +
       '<div class="library-item-info">' +
         '<span class="library-item-title">' + escapeHtml(displayTitle) + '</span>' +
-        '<span class="library-item-id">' + video.shortID + '</span>' +
+        '<div class="library-item-meta">' +
+          '<span class="library-item-id">' + video.shortID + '</span>' +
+          '<div class="library-item-badge">Verified</div>' +
+        '</div>' +
         '<span class="library-item-time">' + formatTime(video.timestamp) + '</span>' +
-      '</div>' +
-      '<div class="library-item-right">' +
-        '<div class="library-item-badge">Verified</div>' +
-        '<button class="library-item-menu-btn" data-index="' + index + '" aria-label="More options">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
-            '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>' +
-          '</svg>' +
-        '</button>' +
       '</div>';
 
     // Click to view verification (not on menu or drag handle)
@@ -400,6 +402,7 @@ function setupDragAndDrop() {
     placeholder = document.createElement("div");
     placeholder.className = "library-item-placeholder";
     placeholder.style.height = rect.height + "px";
+    placeholder.style.minHeight = rect.height + "px";
 
     // Make drag item floating
     dragEl.classList.add("dragging");
@@ -407,6 +410,7 @@ function setupDragAndDrop() {
     dragEl.style.top = rect.top + "px";
     dragEl.style.left = rect.left + "px";
     dragEl.style.width = rect.width + "px";
+    dragEl.style.height = rect.height + "px";
     dragEl.style.zIndex = "100";
     dragEl.style.transition = "none";
 
@@ -481,6 +485,7 @@ function setupDragAndDrop() {
       dragEl.style.top = "";
       dragEl.style.left = "";
       dragEl.style.width = "";
+      dragEl.style.height = "";
       dragEl.style.zIndex = "";
       dragEl.style.transition = "";
 
@@ -752,16 +757,32 @@ function showVerificationResult() {
 // ============ DOWNLOAD ============
 btnDownloadExport.addEventListener("click", async () => {
   const originalText = btnDownloadExport.textContent;
-  btnDownloadExport.textContent = "Preparing...";
+  btnDownloadExport.textContent = "Generating export\u2026";
   btnDownloadExport.disabled = true;
 
   try {
-    const resp = await fetch("/api/export/" + currentShortID);
+    // 2-minute timeout for export generation (transcoding can take time)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const resp = await fetch("/api/export/" + currentShortID, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
     const contentType = resp.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
-      const err = await resp.json();
-      throw new Error(err.error || "Export failed");
+      const data = await resp.json();
+      // If export is still generating, retry after a short delay
+      if (resp.status === 202) {
+        btnDownloadExport.textContent = "Processing\u2026";
+        setTimeout(() => {
+          btnDownloadExport.textContent = originalText;
+          btnDownloadExport.disabled = false;
+          btnDownloadExport.click();
+        }, 3000);
+        return;
+      }
+      throw new Error(data.error || "Export failed");
     }
 
     if (!resp.ok) throw new Error("Download failed");
@@ -778,15 +799,19 @@ btnDownloadExport.addEventListener("click", async () => {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     showToast("Download started");
   } catch (err) {
-    // Fallback: open in new tab for direct download
-    const link = document.createElement("a");
-    link.href = "/api/export/" + currentShortID;
-    link.download = "allybi_" + currentShortID + ".mp4";
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Opening download...");
+    if (err.name === "AbortError") {
+      showToast("Export timed out. Please try again.");
+    } else {
+      // Fallback: open in new tab for direct download
+      const link = document.createElement("a");
+      link.href = "/api/export/" + currentShortID;
+      link.download = "allybi_" + currentShortID + ".mp4";
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Opening download\u2026");
+    }
   } finally {
     btnDownloadExport.textContent = originalText;
     btnDownloadExport.disabled = false;
