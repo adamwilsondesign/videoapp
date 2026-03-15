@@ -132,6 +132,7 @@
       line-height: 1.6;
     }
     .video-wrapper {
+      position: relative;
       border-radius: 14px;
       overflow: hidden;
       background: rgba(0,0,0,0.3);
@@ -140,6 +141,50 @@
     video {
       width: 100%;
       display: block;
+    }
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 2;
+    }
+    .video-overlay-watermark {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      padding: 4% 0 10% 0;
+    }
+    .video-overlay-watermark span {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9px;
+      color: rgba(255,255,255,0.18);
+      white-space: nowrap;
+      line-height: 1;
+      text-align: center;
+    }
+    .video-overlay-watermark span:nth-child(even) {
+      padding-left: 8%;
+    }
+    .video-overlay-strip {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 7%;
+      min-height: 18px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 6px;
     }
     .actions {
       display: flex;
@@ -258,6 +303,16 @@
           <source src="{{VIDEO_URL}}" type="video/mp4">
           Your browser does not support video playback.
         </video>
+        <div class="video-overlay">
+          <div class="video-overlay-watermark">
+            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
+            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
+            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
+            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
+            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
+          </div>
+          <div class="video-overlay-strip">A - Allybi Verified  |  allybi.ai/{{SHORT_ID}}</div>
+        </div>
       </div>
 
       <div class="actions">

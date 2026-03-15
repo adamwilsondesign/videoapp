@@ -89,19 +89,20 @@ async function generateOverlayPng(
 ): Promise<void> {
   const stripH = Math.round(height * 0.07);
   const stripY = height - stripH;
-  const fontSize = Math.max(12, Math.round(height * 0.022));
-  const stripFontSize = Math.max(14, Math.round(height * 0.024));
+  const fontSize = Math.max(10, Math.round(height * 0.02));
+  // Ensure strip text fits within video width
+  const stripFontSize = Math.max(11, Math.round(Math.min(height * 0.022, width * 0.015)));
 
   const wmUnit = `Allybi  ${shortID}`;
-  const wmLine = Array(6).fill(wmUnit).join("          ");
+  const wmLine = Array(4).fill(wmUnit).join("     ");
   const stripText = `A - Allybi Verified  |  allybi.ai/${shortID}`;
 
-  // Build watermark rows (5 staggered rows of semi-transparent text)
+  // Build watermark rows (5 staggered rows, centered, semi-transparent)
   let watermarkRows = "";
   for (let r = 0; r < 5; r++) {
     const yPos = Math.round(height * (0.10 + r * 0.18));
-    const xPos = r % 2 === 0 ? 0 : Math.round(width * 0.10);
-    watermarkRows += `    <text x="${xPos}" y="${yPos}" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" fill="white" fill-opacity="0.10">${escapeXml(wmLine)}</text>\n`;
+    const xOffset = r % 2 === 0 ? 0 : Math.round(width * 0.08);
+    watermarkRows += `    <text x="${Math.round(width / 2 + xOffset)}" y="${yPos}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" fill="white" fill-opacity="0.18">${escapeXml(wmLine)}</text>\n`;
   }
 
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">

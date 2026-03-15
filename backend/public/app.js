@@ -526,6 +526,7 @@ function viewVerification(video) {
   verifyUrl.textContent = video.verifyURL;
 
   verifyPlayer.src = "/videos/" + video.shortID;
+  updateVideoOverlay(video.shortID);
   showScreen("verify-result");
 }
 
@@ -739,12 +740,31 @@ function uploadWithProgress(formData, onProgress) {
 }
 
 // ============ VERIFICATION RESULT ============
+function updateVideoOverlay(shortID) {
+  var watermark = document.getElementById("verify-watermark");
+  var strip = document.getElementById("verify-strip");
+  if (!watermark || !strip) return;
+
+  var wmUnit = "Allybi  " + shortID;
+  var wmLine = wmUnit + "     " + wmUnit + "     " + wmUnit + "     " + wmUnit;
+
+  watermark.innerHTML = "";
+  for (var i = 0; i < 5; i++) {
+    var span = document.createElement("span");
+    span.textContent = wmLine;
+    watermark.appendChild(span);
+  }
+
+  strip.textContent = "A - Allybi Verified  |  allybi.ai/" + shortID;
+}
+
 function showVerificationResult() {
   verifyId.textContent = currentShortID;
   verifyTime.textContent = formatTime(new Date().toISOString());
   verifyUrl.textContent = currentVerifyURL;
 
   verifyPlayer.src = "/videos/" + currentShortID;
+  updateVideoOverlay(currentShortID);
   showScreen("verify-result");
 }
 
