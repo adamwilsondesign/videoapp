@@ -4,51 +4,115 @@ import fs from "fs";
 import { execFileSync } from "child_process";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
+import sharp from "sharp";
 import { getDb } from "../db/connection";
 
 ffmpeg.setFfmpegPath(ffmpegStatic as string);
 
 const UPLOADS_DIR = path.resolve(__dirname, "../../uploads");
 const EXPORTS_DIR = path.resolve(__dirname, "../../exports");
-const FONT_BOLD = path.resolve(__dirname, "../../fonts/IBMPlexMono-Bold.ttf");
-const FONT_REGULAR = path.resolve(__dirname, "../../fonts/IBMPlexMono-Regular.ttf");
 
 if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
 }
 
-// ============ STARTUP: detect capabilities once ============
+// ============ STARTUP ============
 
-const fontsExist = fs.existsSync(FONT_BOLD) && fs.existsSync(FONT_REGULAR);
+// Clear stale cached exports so they regenerate with the branded overlay
+try {
+  const stale = fs.readdirSync(EXPORTS_DIR).filter(f => f.startsWith("export_") && f.endsWith(".mp4"));
+  for (const f of stale) fs.unlinkSync(path.join(EXPORTS_DIR, f));
+  if (stale.length) console.log(`[export] Cleared ${stale.length} stale cached export(s)`);
+} catch {}
 
-let hasDrawtext = false;
+// Check which FFmpeg filters are available
+let hasOverlayFilter = false;
 try {
   const out = execFileSync(ffmpegStatic as string, ["-filters"], {
     encoding: "utf-8", timeout: 5000,
   });
-  hasDrawtext = out.includes("drawtext");
+  hasOverlayFilter = out.includes("overlay");
 } catch (e: any) {
-  hasDrawtext = ((e.stdout || "") + (e.stderr || "")).includes("drawtext");
+  hasOverlayFilter = ((e.stdout || "") + (e.stderr || "")).includes("overlay");
 }
 
-const useOverlays = fontsExist && hasDrawtext;
-console.log(`[export] drawtext=${hasDrawtext}, fonts=${fontsExist} → mode: ${useOverlays ? "OVERLAYS" : "FAST COPY"}`);
+console.log(`[export] overlay filter=${hasOverlayFilter} → mode: ${hasOverlayFilter ? "BRANDED OVERLAY" : "FAST COPY"}`);
 
 // Concurrent export tracking
 const pendingExports = new Map<string, Promise<string>>();
 
 // ============ HELPERS ============
 
-function escapeDrawtext(text: string): string {
+function escapeXml(text: string): string {
   return text
-    .replace(/\\/g, "\\\\")
-    .replace(/:/g, "\\:")
-    .replace(/'/g, "\\'")
-    .replace(/;/g, "\\;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
-function escapeFilterPath(p: string): string {
-  return p.replace(/\\/g, "/").replace(/:/g, "\\:");
+/**
+ * Probe video dimensions by parsing `ffmpeg -i` stderr output.
+ * No ffprobe binary needed.
+ */
+function probeVideo(inputPath: string): { width: number; height: number } {
+  try {
+    execFileSync(ffmpegStatic as string, ["-i", inputPath], {
+      encoding: "utf-8",
+      timeout: 10000,
+    });
+  } catch (e: any) {
+    // ffmpeg -i always exits with code 1 when no output specified — that's expected
+    const stderr: string = e.stderr || "";
+    const match = stderr.match(/Stream.*Video.*?(\d{2,5})x(\d{2,5})/);
+    if (match) {
+      return { width: parseInt(match[1]), height: parseInt(match[2]) };
+    }
+  }
+  // Fallback: assume 1280x720 (common webcam resolution)
+  return { width: 1280, height: 720 };
+}
+
+/**
+ * Generate a transparent PNG overlay with:
+ *  - Semi-transparent watermark text rows across the frame
+ *  - Dark strip at the bottom with the verification text
+ *
+ * Uses SVG → PNG via sharp. No FFmpeg drawtext filter needed.
+ */
+async function generateOverlayPng(
+  width: number,
+  height: number,
+  shortID: string,
+  outputPath: string,
+): Promise<void> {
+  const stripH = Math.round(height * 0.07);
+  const stripY = height - stripH;
+  const fontSize = Math.max(12, Math.round(height * 0.022));
+  const stripFontSize = Math.max(14, Math.round(height * 0.024));
+
+  const wmUnit = `Allybi  ${shortID}`;
+  const wmLine = Array(6).fill(wmUnit).join("          ");
+  const stripText = `A - Allybi Verified  |  allybi.ai/${shortID}`;
+
+  // Build watermark rows (5 staggered rows of semi-transparent text)
+  let watermarkRows = "";
+  for (let r = 0; r < 5; r++) {
+    const yPos = Math.round(height * (0.10 + r * 0.18));
+    const xPos = r % 2 === 0 ? 0 : Math.round(width * 0.10);
+    watermarkRows += `    <text x="${xPos}" y="${yPos}" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" fill="white" fill-opacity="0.10">${escapeXml(wmLine)}</text>\n`;
+  }
+
+  const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+${watermarkRows}
+    <rect x="0" y="${stripY}" width="${width}" height="${stripH}" fill="black" fill-opacity="0.7"/>
+    <text x="${Math.round(width / 2)}" y="${Math.round(stripY + stripH / 2 + stripFontSize * 0.35)}" font-family="'Courier New', Courier, monospace" font-weight="bold" font-size="${stripFontSize}" fill="white" text-anchor="middle">${escapeXml(stripText)}</text>
+</svg>`;
+
+  await sharp(Buffer.from(svg))
+    .png()
+    .toFile(outputPath);
 }
 
 function serveExport(filePath: string, shortID: string, res: Response): void {
@@ -63,16 +127,15 @@ function serveExport(filePath: string, shortID: string, res: Response): void {
 
 /**
  * FAST PATH: Copy video stream as-is, only transcode audio to AAC.
- * Completes in ~1-2 seconds even on slow servers.
- * Used when drawtext filter is not available.
+ * No watermark or verification strip — used only as a last-resort fallback.
  */
 function generateFastExport(inputPath: string, outputPath: string, shortID: string): Promise<string> {
-  console.log(`[export] Fast copy for ${shortID}`);
+  console.log(`[export] Fast copy (no overlay) for ${shortID}`);
   return new Promise<string>((resolve, reject) => {
     ffmpeg(inputPath)
       .outputOptions([
-        "-c:v", "copy",        // Copy video stream — no re-encoding
-        "-c:a", "aac",         // Transcode audio to AAC for compatibility
+        "-c:v", "copy",
+        "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
       ])
@@ -91,64 +154,36 @@ function generateFastExport(inputPath: string, outputPath: string, shortID: stri
 }
 
 /**
- * FULL PATH: Re-encode with branded watermark overlays + verification strip.
- * Requires drawtext filter and fonts. Uses ultrafast preset to minimize time.
+ * BRANDED PATH: Generate overlay PNG with sharp, then composite onto video
+ * using FFmpeg's `overlay` filter (available in ALL FFmpeg builds, unlike drawtext).
+ *
+ * Steps:
+ *  1. Probe video dimensions
+ *  2. Render SVG overlay → PNG via sharp
+ *  3. FFmpeg: [video] + [overlay.png] → overlay=0:0 → libx264 ultrafast → output
  */
-function generateFullExport(inputPath: string, outputPath: string, shortID: string): Promise<string> {
-  console.log(`[export] Full overlay export for ${shortID}`);
+async function generateBrandedExport(inputPath: string, outputPath: string, shortID: string): Promise<string> {
+  console.log(`[export] Branded overlay export for ${shortID}`);
 
-  const rawStripText = `A - Allybi Verified  |  allybi.ai/${shortID}`;
-  const stripText = escapeDrawtext(rawStripText);
-  const wmUnit = `Allybi  ${shortID}`;
-  const wmLine = escapeDrawtext(Array(5).fill(wmUnit).join("          "));
-  const stripH = "0.07";
+  // 1. Probe video dimensions
+  const { width, height } = probeVideo(inputPath);
+  console.log(`[export] Video dimensions: ${width}x${height}`);
 
-  const filters: Array<{ filter: string; options: Record<string, string> }> = [];
+  // 2. Generate overlay PNG
+  const overlayPath = path.join(EXPORTS_DIR, `overlay_${shortID}.png`);
+  await generateOverlayPng(width, height, shortID, overlayPath);
+  console.log(`[export] Overlay PNG generated for ${shortID}`);
 
-  // Watermark rows
-  for (let r = 0; r < 5; r++) {
-    const yFrac = (0.08 + r * 0.19).toFixed(2);
-    filters.push({
-      filter: "drawtext",
-      options: {
-        fontfile: escapeFilterPath(FONT_REGULAR),
-        text: wmLine,
-        fontsize: "(h*0.022)",
-        fontcolor: "white@0.10",
-        x: r % 2 === 0 ? "0" : "(w*0.12)",
-        y: `(h*${yFrac})`,
-      },
-    });
-  }
-
-  // Dark strip at bottom
-  filters.push({
-    filter: "drawbox",
-    options: {
-      x: "0", y: `ih-ih*${stripH}`, w: "iw", h: `ih*${stripH}`,
-      color: "black@0.7", t: "fill",
-    },
-  });
-
-  // Strip text
-  filters.push({
-    filter: "drawtext",
-    options: {
-      fontfile: escapeFilterPath(FONT_BOLD),
-      text: stripText,
-      fontsize: "(h*0.024)",
-      fontcolor: "white",
-      x: "(w-text_w)/2",
-      y: `(h-h*${stripH})+((h*${stripH}-text_h)/2)`,
-    },
-  });
-
+  // 3. Composite with FFmpeg
   return new Promise<string>((resolve, reject) => {
     ffmpeg(inputPath)
-      .videoFilters(filters)
+      .input(overlayPath)
+      .complexFilter("[0:v][1:v]overlay=0:0[vout]")
       .outputOptions([
+        "-map", "[vout]",
+        "-map", "0:a?",           // include audio if present (? = optional)
         "-c:v", "libx264",
-        "-preset", "ultrafast",   // Fastest encode to beat Render's 30s timeout
+        "-preset", "ultrafast",   // fastest encoding to stay within Render's 30s timeout
         "-crf", "23",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
@@ -158,11 +193,13 @@ function generateFullExport(inputPath: string, outputPath: string, shortID: stri
       .output(outputPath)
       .on("start", (cmd: string) => console.log(`[export] Cmd: ${cmd}`))
       .on("end", () => {
-        console.log(`[export] Full export done for ${shortID}`);
+        console.log(`[export] Branded export done for ${shortID}`);
+        try { fs.unlinkSync(overlayPath); } catch {}
         resolve(outputPath);
       })
       .on("error", (err: Error) => {
-        console.error(`[export] Full export failed for ${shortID}: ${err.message}`);
+        console.error(`[export] Branded export failed for ${shortID}: ${err.message}`);
+        try { fs.unlinkSync(overlayPath); } catch {}
         reject(err);
       })
       .run();
@@ -218,9 +255,13 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
     }
   }
 
-  // Generate the export
-  const generate = useOverlays
-    ? generateFullExport(inputPath, outputPath, shortID)
+  // Generate the export — try branded overlay, fall back to fast copy if overlay fails
+  const generate = hasOverlayFilter
+    ? generateBrandedExport(inputPath, outputPath, shortID).catch((brandedErr) => {
+        console.warn(`[export] Branded overlay failed, falling back to fast copy: ${brandedErr.message}`);
+        try { fs.unlinkSync(outputPath); } catch {}
+        return generateFastExport(inputPath, outputPath, shortID);
+      })
     : generateFastExport(inputPath, outputPath, shortID);
 
   pendingExports.set(shortID, generate);
@@ -236,18 +277,16 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
     console.error(`[export] Failed for ${shortID}:`, err.message);
     try { fs.unlinkSync(outputPath); } catch {}
 
-    // Last resort: if even fast copy failed, try serving the original file directly
-    if (!useOverlays) {
-      console.log(`[export] Serving original file as last resort for ${shortID}`);
-      try {
-        const origStat = fs.statSync(inputPath);
-        res.setHeader("Content-Type", "video/mp4");
-        res.setHeader("Content-Length", origStat.size);
-        res.setHeader("Content-Disposition", `attachment; filename="allybi_${shortID}.mp4"`);
-        fs.createReadStream(inputPath).pipe(res);
-        return;
-      } catch {}
-    }
+    // Last resort: serve original file directly
+    console.log(`[export] Serving original file as last resort for ${shortID}`);
+    try {
+      const origStat = fs.statSync(inputPath);
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Content-Length", origStat.size);
+      res.setHeader("Content-Disposition", `attachment; filename="allybi_${shortID}.mp4"`);
+      fs.createReadStream(inputPath).pipe(res);
+      return;
+    } catch {}
 
     res.status(500).json({ error: "Export failed: " + err.message });
   } finally {
