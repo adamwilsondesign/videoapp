@@ -638,6 +638,9 @@ function stopTimer() {
 
 // ============ REVIEW ============
 function showReview() {
+  // Stop camera/microphone immediately — recording is done
+  stopCamera();
+
   const url = URL.createObjectURL(recordedBlob);
   reviewPlayer.src = url;
   reviewPlayer.currentTime = 0;
@@ -893,6 +896,7 @@ btnRetake.addEventListener("click", () => {
   reviewPlayer.src = "";
   recordedBlob = null;
   showScreen("recording");
+  startCamera();
 });
 
 btnFinish.addEventListener("click", () => {

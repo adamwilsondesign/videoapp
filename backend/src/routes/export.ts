@@ -13,6 +13,8 @@ ffmpeg.setFfmpegPath(ffmpegStatic as string);
 
 const UPLOADS_DIR = path.resolve(__dirname, "../../uploads");
 const EXPORTS_DIR = path.resolve(__dirname, "../../exports");
+const FONT_BOLD = path.resolve(__dirname, "../../fonts/IBMPlexMono-Bold.ttf");
+const FONT_REGULAR = path.resolve(__dirname, "../../fonts/IBMPlexMono-Regular.ttf");
 
 if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
@@ -87,6 +89,11 @@ function escapeDrawtext(text: string): string {
     .replace(/:/g, "\\:")   // : -> \:
     .replace(/'/g, "\\'")   // ' -> \'
     .replace(/;/g, "\\;");  // ; -> \;
+}
+
+/** Escape a file path for FFmpeg filter option (colons need escaping) */
+function escapeFilterPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
 // ============ ROUTER ============
@@ -172,6 +179,7 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
     watermarkFilters.push({
       filter: "drawtext",
       options: {
+        fontfile: escapeFilterPath(FONT_REGULAR),
         text: wmLine,
         fontsize: "(h*0.022)",
         fontcolor: "white@0.10",
@@ -206,6 +214,7 @@ router.get("/:shortID", async (req: Request, res: Response): Promise<void> => {
           {
             filter: "drawtext",
             options: {
+              fontfile: escapeFilterPath(FONT_BOLD),
               text: stripText,
               fontsize: "(h*0.024)",
               fontcolor: "white",

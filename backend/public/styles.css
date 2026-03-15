@@ -1103,13 +1103,13 @@ html, body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  padding: calc(var(--safe-top) + 8px) 16px calc(var(--safe-bottom) + 24px);
+  padding: calc(var(--safe-top) + 8px) 16px calc(var(--safe-bottom) + 16px);
 }
 .verify-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0 16px;
+  padding: 8px 0 10px;
 }
 .verify-top-title {
   font-size: 17px;
@@ -1119,12 +1119,12 @@ html, body {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: 20px;
-  padding: 24px 20px;
+  padding: 14px 16px;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
   animation: cardSlideUp 0.4s ease-out;
 }
 @keyframes cardSlideUp {
@@ -1137,9 +1137,9 @@ html, body {
   gap: 8px;
   background: var(--green-bg);
   color: var(--green);
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-radius: 12px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   width: fit-content;
   animation: badgePop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s backwards;
@@ -1169,7 +1169,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 13px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--glass-border);
   animation: metaRowIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
@@ -1213,6 +1213,7 @@ html, body {
   overflow: hidden;
   background: rgba(0,0,0,0.3);
   border: 1px solid rgba(255,255,255,0.08);
+  max-height: 22vh;
   animation: verifyVideoIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s backwards;
 }
 @keyframes verifyVideoIn {
@@ -1221,12 +1222,14 @@ html, body {
 }
 .verify-video-wrapper video {
   width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 .verify-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .verify-actions .btn {
   animation: verifyBtnIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
