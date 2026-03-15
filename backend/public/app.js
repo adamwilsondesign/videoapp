@@ -525,12 +525,7 @@ function viewVerification(video) {
   verifyTime.textContent = formatTime(video.timestamp);
   verifyUrl.textContent = video.verifyURL;
 
-  // Load video — reset first to clear any stale state
-  verifyPlayer.removeAttribute("src");
-  verifyPlayer.load();
   verifyPlayer.src = "/videos/" + video.shortID;
-  verifyPlayer.load();
-
   showScreen("verify-result");
 }
 
@@ -749,75 +744,25 @@ function showVerificationResult() {
   verifyTime.textContent = formatTime(new Date().toISOString());
   verifyUrl.textContent = currentVerifyURL;
 
-  // Load video — reset first to clear any stale state
-  verifyPlayer.removeAttribute("src");
-  verifyPlayer.load();
   verifyPlayer.src = "/videos/" + currentShortID;
-  verifyPlayer.load();
-
   showScreen("verify-result");
 }
 
 // ============ DOWNLOAD ============
-btnDownloadExport.addEventListener("click", async () => {
-  const originalText = btnDownloadExport.textContent;
+btnDownloadExport.addEventListener("click", () => {
   btnDownloadExport.textContent = "Preparing\u2026";
   btnDownloadExport.disabled = true;
 
-  const exportUrl = "/api/export/" + currentShortID;
+  // Direct navigation — server generates the MP4 and responds with
+  // Content-Disposition: attachment, triggering the browser's native
+  // download dialog. Works on iOS Safari, Android Chrome, and desktop.
+  window.location.href = "/api/export/" + currentShortID;
 
-  try {
-    // Poll until the export is ready (handles 202 "still generating" responses)
-    let ready = false;
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      const resp = await fetch(exportUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      const ct = resp.headers.get("content-type") || "";
-
-      if (resp.status === 202) {
-        // Export still generating — consume body and retry
-        await resp.text();
-        btnDownloadExport.textContent = "Processing\u2026";
-        await new Promise(function (r) { setTimeout(r, 2000); });
-        continue;
-      }
-
-      if (ct.includes("application/json")) {
-        const data = await resp.json();
-        throw new Error(data.error || "Export failed");
-      }
-
-      if (!resp.ok) {
-        await resp.text();
-        throw new Error("Download failed");
-      }
-
-      // Export is ready — discard the streamed body (file is cached on server)
-      try { await resp.body.cancel(); } catch (e) { /* ok */ }
-      ready = true;
-      break;
-    }
-
-    if (!ready) throw new Error("Export is taking too long. Please try again.");
-
-    // Trigger native browser download via direct navigation.
-    // Server sends Content-Disposition: attachment which forces download
-    // with the correct .mp4 filename. Works reliably on iOS + Android + desktop.
-    window.location.href = exportUrl;
-    showToast("Download started");
-  } catch (err) {
-    if (err.name === "AbortError") {
-      showToast("Export timed out. Please try again.");
-    } else {
-      showToast(err.message || "Download failed");
-    }
-  } finally {
-    btnDownloadExport.textContent = originalText;
+  // Reset button after a few seconds (download starts in background)
+  setTimeout(function () {
+    btnDownloadExport.textContent = "Download Video";
     btnDownloadExport.disabled = false;
-  }
+  }, 4000);
 });
 
 // ============ SHARE ============
