@@ -1280,52 +1280,6 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ============ VIDEO OVERLAY (watermark + verification strip) ============ */
-.video-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 2;
-}
-.video-overlay-watermark {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
-  padding: 4% 0 10% 0;
-}
-.video-overlay-watermark span {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 7px;
-  color: rgba(255,255,255,0.18);
-  white-space: nowrap;
-  line-height: 1;
-  text-align: center;
-}
-.video-overlay-watermark span:nth-child(even) {
-  padding-left: 8%;
-}
-.video-overlay-strip {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 7%;
-  min-height: 14px;
-  background: rgba(0,0,0,0.7);
-  color: white;
-  font-family: 'Courier New', Courier, monospace;
-  font-weight: bold;
-  font-size: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 0 4px;
-}
-
 /* ============ UTILITIES ============ */
 .mono {
   font-family: "IBM Plex Mono", "SF Mono", Menlo, monospace;

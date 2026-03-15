@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Allybi Verified | {{SHORT_ID}}</title>
   <meta property="og:title" content="Allybi Verified Video | {{SHORT_ID}}">
-  <meta property="og:description" content="This video has been verified by Allybi. View the original unmodified recording.">
+  <meta property="og:description" content="This video has been verified by Allybi. View the verified recording with embedded watermark.">
   <meta property="og:url" content="{{VERIFY_URL}}">
   <meta property="og:type" content="video.other">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Allybi Verified Video | {{SHORT_ID}}">
-  <meta name="twitter:description" content="This video has been verified by Allybi. View the original unmodified recording.">
+  <meta name="twitter:description" content="This video has been verified by Allybi. View the verified recording with embedded watermark.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -132,7 +132,6 @@
       line-height: 1.6;
     }
     .video-wrapper {
-      position: relative;
       border-radius: 14px;
       overflow: hidden;
       background: rgba(0,0,0,0.3);
@@ -141,50 +140,6 @@
     video {
       width: 100%;
       display: block;
-    }
-    .video-overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      overflow: hidden;
-      z-index: 2;
-    }
-    .video-overlay-watermark {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-evenly;
-      padding: 4% 0 10% 0;
-    }
-    .video-overlay-watermark span {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9px;
-      color: rgba(255,255,255,0.18);
-      white-space: nowrap;
-      line-height: 1;
-      text-align: center;
-    }
-    .video-overlay-watermark span:nth-child(even) {
-      padding-left: 8%;
-    }
-    .video-overlay-strip {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 7%;
-      min-height: 18px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      font-family: 'Courier New', Courier, monospace;
-      font-weight: bold;
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 0 6px;
     }
     .actions {
       display: flex;
@@ -293,9 +248,8 @@
       </div>
 
       <div class="canonical">
-        This is the canonical Allybi record. The video above is the unmodified
-        original as uploaded by the creator. It has not been altered, filtered,
-        or re-encoded since capture.
+        This is the canonical Allybi record. The video above is the verified
+        original with an embedded Allybi watermark applied at upload time.
       </div>
 
       <div class="video-wrapper">
@@ -303,16 +257,6 @@
           <source src="{{VIDEO_URL}}" type="video/mp4">
           Your browser does not support video playback.
         </video>
-        <div class="video-overlay">
-          <div class="video-overlay-watermark">
-            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
-            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
-            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
-            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
-            <span>Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}     Allybi  {{SHORT_ID}}</span>
-          </div>
-          <div class="video-overlay-strip">A - Allybi Verified  |  allybi.ai/{{SHORT_ID}}</div>
-        </div>
       </div>
 
       <div class="actions">

@@ -526,7 +526,6 @@ function viewVerification(video) {
   verifyUrl.textContent = video.verifyURL;
 
   verifyPlayer.src = "/videos/" + video.shortID;
-  updateVideoOverlay(video.shortID);
   showScreen("verify-result");
 }
 
@@ -686,13 +685,6 @@ async function uploadVideo() {
     currentShortID = data.shortID;
     currentVerifyURL = data.verifyURL;
 
-    uploadStatus.textContent = "Processing...";
-    progressFill.style.width = "90%";
-    uploadPercent.textContent = "90%";
-
-    // Pre-generate the export in background so download works immediately
-    fetch("/api/export/" + data.shortID).catch(() => {});
-
     progressFill.style.width = "100%";
     uploadPercent.textContent = "100%";
 
@@ -722,6 +714,14 @@ function uploadWithProgress(formData, onProgress) {
       }
     };
 
+    // Upload body fully sent; server is now encoding the watermark
+    xhr.upload.onload = () => {
+      onProgress(1);
+      uploadStatus.textContent = "Applying watermark\u2026";
+      progressFill.style.width = "90%";
+      uploadPercent.textContent = "90%";
+    };
+
     xhr.onload = () => {
       resolve({
         ok: xhr.status >= 200 && xhr.status < 300,
@@ -740,31 +740,12 @@ function uploadWithProgress(formData, onProgress) {
 }
 
 // ============ VERIFICATION RESULT ============
-function updateVideoOverlay(shortID) {
-  var watermark = document.getElementById("verify-watermark");
-  var strip = document.getElementById("verify-strip");
-  if (!watermark || !strip) return;
-
-  var wmUnit = "Allybi  " + shortID;
-  var wmLine = wmUnit + "     " + wmUnit + "     " + wmUnit + "     " + wmUnit;
-
-  watermark.innerHTML = "";
-  for (var i = 0; i < 5; i++) {
-    var span = document.createElement("span");
-    span.textContent = wmLine;
-    watermark.appendChild(span);
-  }
-
-  strip.textContent = "A - Allybi Verified  |  allybi.ai/" + shortID;
-}
-
 function showVerificationResult() {
   verifyId.textContent = currentShortID;
   verifyTime.textContent = formatTime(new Date().toISOString());
   verifyUrl.textContent = currentVerifyURL;
 
   verifyPlayer.src = "/videos/" + currentShortID;
-  updateVideoOverlay(currentShortID);
   showScreen("verify-result");
 }
 
