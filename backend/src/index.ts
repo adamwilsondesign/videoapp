@@ -75,6 +75,34 @@ app.get("/api/debug", (_req, res) => {
   info.uploadsFiles = fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir).length : 0;
   info.exportsDirExists = fs.existsSync(exportsDir);
 
+  // Check codecs
+  try {
+    const codecs = execFileSync(ffmpegStatic, ["-codecs"], { encoding: "utf-8", timeout: 5000 });
+    info.hasLibx264 = codecs.includes("libx264");
+    info.hasAac = codecs.includes("aac");
+  } catch (e: any) {
+    const combined = (e.stdout || "") + (e.stderr || "");
+    info.hasLibx264 = combined.includes("libx264");
+    info.hasAac = combined.includes("aac");
+  }
+
+  // Quick FFmpeg test: can it actually encode?
+  try {
+    const testOut = path.resolve(__dirname, "../exports/test_encode.mp4");
+    execFileSync(ffmpegStatic, [
+      "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=1",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p",
+      "-f", "mp4", "-y", testOut,
+    ], { timeout: 15000, encoding: "utf-8" });
+    const testStat = fs.statSync(testOut);
+    info.testEncodeOK = testStat.size > 0;
+    info.testEncodeSize = testStat.size;
+    fs.unlinkSync(testOut);
+  } catch (e: any) {
+    info.testEncodeOK = false;
+    info.testEncodeError = (e.stderr || e.message || "").substring(0, 300);
+  }
+
   // Memory
   const mem = process.memoryUsage();
   info.memoryMB = {
