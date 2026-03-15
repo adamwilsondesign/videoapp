@@ -525,12 +525,11 @@ function viewVerification(video) {
   verifyTime.textContent = formatTime(video.timestamp);
   verifyUrl.textContent = video.verifyURL;
 
-  // Load video and seek to get preview frame
+  // Load video — reset first to clear any stale state
+  verifyPlayer.removeAttribute("src");
+  verifyPlayer.load();
   verifyPlayer.src = "/videos/" + video.shortID;
-  verifyPlayer.addEventListener("loadeddata", function seekOnce() {
-    verifyPlayer.currentTime = 0.1;
-    verifyPlayer.removeEventListener("loadeddata", seekOnce);
-  });
+  verifyPlayer.load();
 
   showScreen("verify-result");
 }
@@ -749,71 +748,71 @@ function showVerificationResult() {
   verifyId.textContent = currentShortID;
   verifyTime.textContent = formatTime(new Date().toISOString());
   verifyUrl.textContent = currentVerifyURL;
+
+  // Load video — reset first to clear any stale state
+  verifyPlayer.removeAttribute("src");
+  verifyPlayer.load();
   verifyPlayer.src = "/videos/" + currentShortID;
-  verifyPlayer.addEventListener("loadeddata", function seekOnce() {
-    verifyPlayer.currentTime = 0.1;
-    verifyPlayer.removeEventListener("loadeddata", seekOnce);
-  });
+  verifyPlayer.load();
+
   showScreen("verify-result");
 }
 
 // ============ DOWNLOAD ============
 btnDownloadExport.addEventListener("click", async () => {
   const originalText = btnDownloadExport.textContent;
-  btnDownloadExport.textContent = "Generating export\u2026";
+  btnDownloadExport.textContent = "Preparing\u2026";
   btnDownloadExport.disabled = true;
 
-  try {
-    // 2-minute timeout for export generation (transcoding can take time)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
-    const resp = await fetch("/api/export/" + currentShortID, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+  const exportUrl = "/api/export/" + currentShortID;
 
-    const contentType = resp.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const data = await resp.json();
-      // If export is still generating, retry after a short delay
+  try {
+    // Poll until the export is ready (handles 202 "still generating" responses)
+    let ready = false;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const resp = await fetch(exportUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      const ct = resp.headers.get("content-type") || "";
+
       if (resp.status === 202) {
+        // Export still generating — consume body and retry
+        await resp.text();
         btnDownloadExport.textContent = "Processing\u2026";
-        setTimeout(() => {
-          btnDownloadExport.textContent = originalText;
-          btnDownloadExport.disabled = false;
-          btnDownloadExport.click();
-        }, 3000);
-        return;
+        await new Promise(function (r) { setTimeout(r, 2000); });
+        continue;
       }
-      throw new Error(data.error || "Export failed");
+
+      if (ct.includes("application/json")) {
+        const data = await resp.json();
+        throw new Error(data.error || "Export failed");
+      }
+
+      if (!resp.ok) {
+        await resp.text();
+        throw new Error("Download failed");
+      }
+
+      // Export is ready — discard the streamed body (file is cached on server)
+      try { await resp.body.cancel(); } catch (e) { /* ok */ }
+      ready = true;
+      break;
     }
 
-    if (!resp.ok) throw new Error("Download failed");
+    if (!ready) throw new Error("Export is taking too long. Please try again.");
 
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "allybi_" + currentShortID + ".mp4";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    // Trigger native browser download via direct navigation.
+    // Server sends Content-Disposition: attachment which forces download
+    // with the correct .mp4 filename. Works reliably on iOS + Android + desktop.
+    window.location.href = exportUrl;
     showToast("Download started");
   } catch (err) {
     if (err.name === "AbortError") {
       showToast("Export timed out. Please try again.");
     } else {
-      // Fallback: open in new tab for direct download
-      const link = document.createElement("a");
-      link.href = "/api/export/" + currentShortID;
-      link.download = "allybi_" + currentShortID + ".mp4";
-      link.target = "_blank";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast("Opening download\u2026");
+      showToast(err.message || "Download failed");
     }
   } finally {
     btnDownloadExport.textContent = originalText;

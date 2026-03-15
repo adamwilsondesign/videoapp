@@ -28,6 +28,11 @@ router.get("/:shortID", (req: Request, res: Response): void => {
   const stat = fs.statSync(filePath);
   const range = req.headers.range;
 
+  // Normalize MIME type — strip codec params (e.g. "video/mp4;codecs=avc1" → "video/mp4")
+  // iOS Safari can choke on codec parameters in Content-Type headers
+  const rawMime: string = row.mime_type || "video/mp4";
+  const mimeType = rawMime.split(";")[0].trim() || "video/mp4";
+
   if (range) {
     const parts = range.replace(/bytes=/, "").split("-");
     const start = parseInt(parts[0], 10);
@@ -38,13 +43,13 @@ router.get("/:shortID", (req: Request, res: Response): void => {
       "Content-Range": `bytes ${start}-${end}/${stat.size}`,
       "Accept-Ranges": "bytes",
       "Content-Length": chunkSize,
-      "Content-Type": row.mime_type,
+      "Content-Type": mimeType,
     });
     fs.createReadStream(filePath, { start, end }).pipe(res);
   } else {
     res.writeHead(200, {
       "Content-Length": stat.size,
-      "Content-Type": row.mime_type,
+      "Content-Type": mimeType,
       "Accept-Ranges": "bytes",
     });
     fs.createReadStream(filePath).pipe(res);
