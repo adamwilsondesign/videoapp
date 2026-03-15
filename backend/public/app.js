@@ -374,10 +374,12 @@ document.addEventListener("touchstart", (e) => {
   }
 });
 
-// ============ DRAG AND DROP ============
+// ============ DRAG AND DROP (2-column grid aware) ============
 function setupDragAndDrop() {
   let dragEl = null;
+  let startX = 0;
   let startY = 0;
+  let startLeft = 0;
   let startTop = 0;
   let placeholder = null;
 
@@ -394,8 +396,11 @@ function setupDragAndDrop() {
 
     dragEl = e.target.closest(".library-item");
     const rect = dragEl.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startX = clientX;
     startY = clientY;
+    startLeft = rect.left;
     startTop = rect.top;
 
     // Create placeholder
@@ -429,36 +434,46 @@ function setupDragAndDrop() {
     if (!dragEl) return;
     e.preventDefault();
 
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const delta = clientY - startY;
-    dragEl.style.top = (startTop + delta) + "px";
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+    dragEl.style.top = (startTop + deltaY) + "px";
+    dragEl.style.left = (startLeft + deltaX) + "px";
 
-    // Get all non-dragging items
+    const dragCenterX = startLeft + deltaX + dragEl.offsetWidth / 2;
+    const dragCenterY = startTop + deltaY + dragEl.offsetHeight / 2;
+
+    // Find the correct insert position considering both X and Y (2-column grid)
     const others = [...libraryList.querySelectorAll(".library-item:not(.dragging)")];
-    const dragMid = startTop + delta + dragEl.offsetHeight / 2;
+    let insertBefore = null;
 
-    for (let i = 0; i < others.length; i++) {
-      const otherRect = others[i].getBoundingClientRect();
-      const otherMid = otherRect.top + otherRect.height / 2;
+    for (var i = 0; i < others.length; i++) {
+      var rect = others[i].getBoundingClientRect();
+      var itemCenterY = rect.top + rect.height / 2;
+      var itemCenterX = rect.left + rect.width / 2;
+      var rowThreshold = rect.height * 0.35;
 
-      // Moving down: if drag center is below the other item's center
-      if (dragMid > otherMid) {
-        // Place placeholder after this item
-        if (others[i].nextSibling !== placeholder) {
-          libraryList.insertBefore(placeholder, others[i].nextSibling);
-        }
+      if (dragCenterY < itemCenterY - rowThreshold) {
+        // Drag is clearly above this item's row → insert before
+        insertBefore = others[i];
+        break;
+      }
+      if (Math.abs(dragCenterY - itemCenterY) <= rowThreshold && dragCenterX < itemCenterX) {
+        // Same row, drag is to the left → insert before
+        insertBefore = others[i];
+        break;
       }
     }
 
-    // Moving up: check from top
-    for (let i = 0; i < others.length; i++) {
-      const otherRect = others[i].getBoundingClientRect();
-      const otherMid = otherRect.top + otherRect.height / 2;
-      if (dragMid < otherMid) {
-        if (placeholder.nextSibling !== others[i] || placeholder.previousSibling !== others[i]) {
-          libraryList.insertBefore(placeholder, others[i]);
-        }
-        break;
+    if (insertBefore) {
+      if (insertBefore !== placeholder.nextSibling) {
+        libraryList.insertBefore(placeholder, insertBefore);
+      }
+    } else {
+      // Drag is past all items → append at end
+      if (placeholder.nextSibling !== null) {
+        libraryList.appendChild(placeholder);
       }
     }
   }
@@ -468,11 +483,10 @@ function setupDragAndDrop() {
 
     // Animate to final position
     const placeholderRect = placeholder.getBoundingClientRect();
-    const currentTop = parseFloat(dragEl.style.top);
-    const targetTop = placeholderRect.top;
 
-    dragEl.style.transition = "top 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)";
-    dragEl.style.top = targetTop + "px";
+    dragEl.style.transition = "top 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)";
+    dragEl.style.top = placeholderRect.top + "px";
+    dragEl.style.left = placeholderRect.left + "px";
 
     setTimeout(() => {
       // Insert dragEl where placeholder is

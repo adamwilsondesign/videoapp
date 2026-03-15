@@ -74,24 +74,39 @@ async function generateOverlayPng(
 ): Promise<void> {
   const stripH = Math.round(height * 0.07);
   const stripY = height - stripH;
-  const fontSize = Math.max(10, Math.round(height * 0.02));
-  const stripFontSize = Math.max(11, Math.round(Math.min(height * 0.022, width * 0.015)));
+  const fontSize = Math.max(10, Math.round(height * 0.018));
+  // Monospace char width ≈ 0.6 × font-size
+  const charW = (sz: number) => sz * 0.6;
 
+  // --- Watermark rows ---
   const wmUnit = `Allybi  ${shortID}`;
   const wmLine = Array(4).fill(wmUnit).join("     ");
-  const stripText = `A - Allybi Verified  |  allybi.ai/${shortID}`;
 
   let watermarkRows = "";
-  for (let r = 0; r < 5; r++) {
-    const yPos = Math.round(height * (0.10 + r * 0.18));
+  for (let r = 0; r < 6; r++) {
+    const yPos = Math.round(height * (0.08 + r * 0.16));
     const xOffset = r % 2 === 0 ? 0 : Math.round(width * 0.08);
-    watermarkRows += `    <text x="${Math.round(width / 2 + xOffset)}" y="${yPos}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" fill="white" fill-opacity="0.18">${escapeXml(wmLine)}</text>\n`;
+    // Manually centre: x = (width - textWidth) / 2 + offset
+    const approxTextW = wmLine.length * charW(fontSize);
+    const xPos = Math.round(Math.max(0, (width - approxTextW) / 2) + xOffset);
+    watermarkRows += `    <text x="${xPos}" y="${yPos}" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" fill="white" fill-opacity="0.35">${escapeXml(wmLine)}</text>\n`;
   }
+
+  // --- Bottom verification strip ---
+  const stripText = `Allybi Verified  |  ${shortID}`;
+  // Scale strip font to fit within 90% of video width
+  const maxStripW = width * 0.9;
+  let stripFontSize = Math.max(11, Math.round(height * 0.022));
+  while (stripText.length * charW(stripFontSize) > maxStripW && stripFontSize > 10) {
+    stripFontSize--;
+  }
+  const stripTextW = stripText.length * charW(stripFontSize);
+  const stripTextX = Math.round((width - stripTextW) / 2);
 
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
 ${watermarkRows}
-    <rect x="0" y="${stripY}" width="${width}" height="${stripH}" fill="black" fill-opacity="0.7"/>
-    <text x="${Math.round(width / 2)}" y="${Math.round(stripY + stripH / 2 + stripFontSize * 0.35)}" font-family="'Courier New', Courier, monospace" font-weight="bold" font-size="${stripFontSize}" fill="white" text-anchor="middle">${escapeXml(stripText)}</text>
+    <rect x="0" y="${stripY}" width="${width}" height="${stripH}" fill="black" fill-opacity="0.75"/>
+    <text x="${stripTextX}" y="${Math.round(stripY + stripH / 2 + stripFontSize * 0.35)}" font-family="'Courier New', Courier, monospace" font-weight="bold" font-size="${stripFontSize}" fill="white">${escapeXml(stripText)}</text>
 </svg>`;
 
   await sharp(Buffer.from(svg)).png().toFile(outputPath);
